@@ -5,6 +5,7 @@ export type WasteCategory =
   | "paper"
   | "ewaste"
   | "glass"
+  | "mixed"
   | "unknown";
 
 export interface Detection {

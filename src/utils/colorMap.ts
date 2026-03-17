@@ -7,6 +7,7 @@ export const CATEGORY_COLORS: Record<WasteCategory, string> = {
   paper: "#D4B483",
   ewaste: "#E84040",
   glass: "#1D9E75",
+  mixed: "#A855F7",
   unknown: "#6B7C6F",
 };
 
@@ -17,5 +18,6 @@ export const CATEGORY_LABELS: Record<WasteCategory, string> = {
   paper: "Paper",
   ewaste: "E-Waste",
   glass: "Glass",
+  mixed: "Mixed Waste",
   unknown: "Unknown",
 };

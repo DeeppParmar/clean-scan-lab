@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # Model
     model_path: str = Field("yolov8n-seg.pt", alias="MODEL_PATH")
-    yolo_conf: float = Field(0.6, alias="YOLO_CONF")
+    yolo_conf: float = Field(0.82, alias="YOLO_CONF")
     yolo_iou: float = Field(0.5, alias="YOLO_IOU")
 
     # Security

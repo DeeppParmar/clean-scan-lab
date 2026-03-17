@@ -20,6 +20,10 @@ from services.rule_engine import apply_rules
 from utils.label_map import LABEL_MAP
 from utils.image_utils import resize_image
 
+# Only these COCO class indices make sense as waste detections.
+# Everything else (person, car, banana, etc.) is silently dropped.
+VALID_WASTE_CLASSES: frozenset[int] = frozenset(LABEL_MAP.keys())
+
 
 class DetectorService:
     """Singleton detector. Call load() once at startup, never again."""
@@ -85,6 +89,11 @@ class DetectorService:
                     continue
 
                 cls_idx = int(box.cls[0])
+
+                # Whitelist filter: skip any COCO class that isn't waste
+                if cls_idx not in VALID_WASTE_CLASSES:
+                    continue
+
                 category, label = LABEL_MAP.get(cls_idx, ("unknown", "Unknown Object"))
 
                 # Normalise bbox to 0–1
