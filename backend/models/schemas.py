@@ -26,6 +26,8 @@ class Detection(BaseModel):
     recyclable: bool = False
     bin_color: str = "black"
     disposal_instructions: str = ""
+    suggestion: str = ""
+    action: str = "Dispose"
     hazardous: bool = False
 
 

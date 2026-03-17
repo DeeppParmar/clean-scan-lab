@@ -7,9 +7,12 @@ Model classes (12):
   0: battery   1: biological   2: brown-glass   3: cardboard
   4: clothes   5: green-glass   6: metal   7: paper
   8: plastic   9: shoes   10: trash   11: white-glass
+
+Normalized to 8 clean categories:
+  plastic | paper | metal | glass | organic | ewaste | textile | general
 """
 
-# Waste-trained model class index → (category, label)
+# Waste-trained model class index → (normalized_category, human_label)
 LABEL_MAP: dict[int, tuple[str, str]] = {
     0:  ("ewaste",  "Battery"),
     1:  ("organic", "Biological Waste"),
@@ -50,7 +53,7 @@ RECYCLABILITY_WEIGHTS: dict[str, float] = {
     "unknown":  0.10,
 }
 
-# Recyclable categories (sorted correctly = in one of these)
+# Recyclable categories
 RECYCLABLE_CATEGORIES: frozenset[str] = frozenset({
     "plastic", "metal", "glass", "paper",
 })

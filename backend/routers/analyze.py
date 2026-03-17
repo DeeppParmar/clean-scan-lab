@@ -68,16 +68,15 @@ async def analyze(
     # ── 5. Eco-score + aggregation ───────────────────────────────────────────
     eco_score = calculate_eco_score(detections)
     category_counts = Counter(d.category for d in detections)
-    top_category, top_count = category_counts.most_common(1)[0]
+    categories = [d.category for d in detections]
+    unique = set(categories)
 
-    # If no single category appears more than once and there are multiple
-    # detections, label it "mixed" (frontend shows "Mixed Waste")
-    if top_count == 1 and len(detections) > 1:
+    if len(unique) > 1:
         dominant_category = "mixed"
         dominant_count = len(detections)
     else:
-        dominant_category = top_category
-        dominant_count = top_count
+        dominant_category = categories[0]
+        dominant_count = len(categories)
 
     object_counts = dict(category_counts)
 

@@ -81,11 +81,12 @@ async def stream(websocket: WebSocket):
                 latency_ms = round((time.perf_counter() - t0) * 1000, 1)
 
                 eco_score = calculate_eco_score(detections)
-                dominant_category = (
-                    Counter(d.category for d in detections).most_common(1)[0][0]
-                    if detections
-                    else None
-                )
+                if detections:
+                    categories = [d.category for d in detections]
+                    unique = set(categories)
+                    dominant_category = "mixed" if len(unique) > 1 else categories[0]
+                else:
+                    dominant_category = None
 
                 result = StreamResult(
                     frame_id=str(uuid.uuid4()),

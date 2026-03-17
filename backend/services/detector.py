@@ -70,46 +70,54 @@ class DetectorService:
     def _run_inference(self, image: np.ndarray) -> list[Detection]:
         image = resize_image(image, max_size=640)
         results = self._model(
-            image, conf=settings.yolo_conf, iou=settings.yolo_iou, verbose=False
+            image, conf=settings.yolo_conf, iou=settings.yolo_iou, agnostic_nms=True, verbose=False
         )
 
         detections: list[Detection] = []
         h, w = image.shape[:2]
 
+        # First pass: collect valid detections and count categories
+        valid_items = []
+        category_counts = {}
+
         for result in results:
             for i, box in enumerate(result.boxes):
                 confidence = float(box.conf[0])
 
-                # Area filter: discard detections covering < 1% of image
+                # Area filter: discard detections covering < 2% of image
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
                 area_ratio = ((x2 - x1) * (y2 - y1)) / (w * h)
-                if area_ratio < 0.01:
+                if area_ratio < 0.02:
                     continue
 
                 cls_idx = int(box.cls[0])
                 category, label = LABEL_MAP.get(cls_idx, ("unknown", "Unknown Object"))
 
-                # Normalise bbox to 0–1
-                bbox = [x1 / w, y1 / h, x2 / w, y2 / h]
+                category_counts[category] = category_counts.get(category, 0) + 1
+                valid_items.append((result, i, confidence, x1, y1, x2, y2, category, label))
 
-                # Mask polygon points (normalised) — only if model has segmentation heads
-                mask_points = None
-                if result.masks is not None and i < len(result.masks.xy):
-                    pts = result.masks.xy[i].tolist()
-                    mask_points = [[p[0] / w, p[1] / h] for p in pts]
+        # Second pass: build Detection objects with count-aware rules
+        for result, i, confidence, x1, y1, x2, y2, category, label in valid_items:
+            bbox = [x1 / w, y1 / h, x2 / w, y2 / h]
 
-                rules = apply_rules(category)
-                detections.append(
-                    Detection(
-                        id=str(uuid4()),
-                        label=label,
-                        category=category,
-                        confidence=confidence,
-                        bbox=bbox,
-                        mask_points=mask_points,
-                        **rules,
-                    )
+            # Mask polygon points (normalised)
+            mask_points = None
+            if result.masks is not None and i < len(result.masks.xy):
+                pts = result.masks.xy[i].tolist()
+                mask_points = [[p[0] / w, p[1] / h] for p in pts]
+
+            rules = apply_rules(category, category_counts[category])
+            detections.append(
+                Detection(
+                    id=str(uuid4()),
+                    label=label,
+                    category=category,
+                    confidence=confidence,
+                    bbox=bbox,
+                    mask_points=mask_points,
+                    **rules,
                 )
+            )
 
         logger.debug(f"Inference complete — {len(detections)} detections")
         return detections

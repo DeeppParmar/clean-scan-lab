@@ -1,6 +1,7 @@
 """
-EcoLens — Rule Engine
-Maps each waste category → disposal metadata.
+EcoLens — Dynamic Rule Engine
+Maps each waste category → disposal metadata with dynamic suggestions
+based on detection count and context.
 """
 from __future__ import annotations
 
@@ -61,7 +62,29 @@ RULES: dict[str, dict] = {
     },
 }
 
+# Dynamic suggestion suffixes based on category count
+BULK_SUGGESTIONS: dict[str, str] = {
+    "plastic": " Consider bulk recycling at a deposit centre.",
+    "metal": " Large metal items may qualify for scrap metal pickup.",
+    "glass": " Group by colour for better recycling outcomes.",
+    "paper": " Bundle cardboard flat for efficient collection.",
+    "ewaste": " Schedule a free e-waste collection with your council.",
+    "textile": " Consider donating to charity or textile recycling banks.",
+    "organic": " Start a home compost for consistent organic waste.",
+    "general": " Minimise general waste — check if items can be separated.",
+}
 
-def apply_rules(category: str) -> dict:
-    """Return disposal rule dict for a given category slug."""
-    return RULES.get(category, RULES["unknown"])
+
+def apply_rules(category: str, count: int = 1) -> dict:
+    """Return disposal rule dict for a given category slug.
+    Adds dynamic suggestions when count > 3."""
+    base = RULES.get(category, RULES["unknown"]).copy()
+
+    # Add dynamic suggestion and rename for API compatibility
+    suggestion = base.pop("disposal_instructions")
+    if count > 3 and category in BULK_SUGGESTIONS:
+        suggestion += BULK_SUGGESTIONS[category]
+
+    base["suggestion"] = suggestion
+    base["action"] = "Recycle" if base["recyclable"] else "Dispose"
+    return base
