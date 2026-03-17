@@ -28,6 +28,28 @@ LABEL_MAP: dict[int, tuple[str, str]] = {
     11: ("glass",   "White Glass"),
 }
 
+def normalize_category(raw_category: str) -> tuple[str, str]:
+    """Map string labels from MobileNetV2 to internal standardized categories."""
+    raw = raw_category.lower()
+    
+    # Map common dataset categories to our internal schema
+    if raw in ["plastic"]:
+        return ("plastic", "Plastic Item")
+    elif raw in ["metal"]:
+        return ("metal", "Metal Item")
+    elif raw in ["glass", "brown-glass", "green-glass", "white-glass"]:
+        return ("glass", "Glass")
+    elif raw in ["paper", "cardboard"]:
+        return ("paper", "Paper / Cardboard")
+    elif raw in ["battery"]:
+        return ("ewaste", "Battery (E-Waste)")
+    elif raw in ["biological", "organic", "food"]:
+        return ("organic", "Organic Waste")
+    elif raw in ["clothes", "shoes", "textile"]:
+        return ("textile", "Textile")
+    else:
+        return ("general", "General Waste")
+
 # Category slug → representative class idx (for Grad-CAM targeting)
 CATEGORY_TO_CLASS_IDX: dict[str, int] = {
     "plastic": 8,
