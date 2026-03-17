@@ -1,0 +1,3 @@
+"""
+EcoLens — middleware package
+"""
