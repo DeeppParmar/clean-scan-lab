@@ -21,7 +21,7 @@ const categoryIcons: Record<WasteCategory, React.ElementType> = {
   unknown: Trash2,
 };
 
-function getDisposalInfo(det: { action: string; bin_color: string; category: WasteCategory }) {
+function getDisposalInfo(det: { action: string; bin_color: string; category: WasteCategory; suggestion: string }) {
   const iconMap: Record<string, React.ElementType> = {
     Recycle: Recycle,
     Compost: Leaf,
