@@ -1,3 +1,6 @@
-# Welcome to your Lovable project
+# EcoLens — Smart Waste Classification & Recycling System
 
-TODO: Document your project here
+> Microsoft Sustainability AI Project, 2026
+
+Frontend: React + Vite + shadcn/ui  
+Backend: FastAPI + YOLOv8 + Supabase
