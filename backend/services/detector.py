@@ -2,6 +2,9 @@
 EcoLens — YOLOv8 Detector Service
 Singleton — loaded ONCE via FastAPI lifespan, never reloaded.
 Detection runs in ThreadPoolExecutor so the event loop stays free.
+
+Now uses a waste-trained YOLOv8 model (12 waste-specific classes)
+instead of the generic COCO model.
 """
 from __future__ import annotations
 
@@ -20,10 +23,6 @@ from services.rule_engine import apply_rules
 from utils.label_map import LABEL_MAP
 from utils.image_utils import resize_image
 
-# Only these COCO class indices make sense as waste detections.
-# Everything else (person, car, banana, etc.) is silently dropped.
-VALID_WASTE_CLASSES: frozenset[int] = frozenset(LABEL_MAP.keys())
-
 
 class DetectorService:
     """Singleton detector. Call load() once at startup, never again."""
@@ -38,18 +37,17 @@ class DetectorService:
     def load(self) -> None:
         """
         Called ONCE inside FastAPI lifespan startup.
-        Loads YOLOv8n-seg, switches to half precision, and runs a warm-up pass
+        Loads waste-trained YOLOv8 from HuggingFace and runs a warm-up pass
         so the first real request has no cold-start latency.
         """
-        logger.info("Loading YOLOv8n-seg model…")
+        logger.info(f"Loading waste-trained model: {settings.model_path}")
         self._model = YOLO(settings.model_path)
-
 
         # Warm-up: one dummy pass to avoid first-request cold start
         dummy = np.zeros((640, 640, 3), dtype=np.uint8)
         self._model(dummy, verbose=False)
         self.is_loaded = True
-        logger.info("YOLOv8n-seg ready ✓")
+        logger.info("Waste detection model ready ✓")
 
     @property
     def model(self) -> YOLO:
@@ -89,17 +87,12 @@ class DetectorService:
                     continue
 
                 cls_idx = int(box.cls[0])
-
-                # Whitelist filter: skip any COCO class that isn't waste
-                if cls_idx not in VALID_WASTE_CLASSES:
-                    continue
-
                 category, label = LABEL_MAP.get(cls_idx, ("unknown", "Unknown Object"))
 
                 # Normalise bbox to 0–1
                 bbox = [x1 / w, y1 / h, x2 / w, y2 / h]
 
-                # Mask polygon points (normalised) from segmentation model
+                # Mask polygon points (normalised) — only if model has segmentation heads
                 mask_points = None
                 if result.masks is not None and i < len(result.masks.xy):
                     pts = result.masks.xy[i].tolist()

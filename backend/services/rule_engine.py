@@ -41,6 +41,18 @@ RULES: dict[str, dict] = {
         "disposal_instructions": "Rinse and place in glass/white recycling bin. Remove lids.",
         "hazardous": False,
     },
+    "textile": {
+        "recyclable": False,
+        "bin_color": "purple",
+        "disposal_instructions": "Donate usable items. Worn-out textiles go to textile recycling drop-off.",
+        "hazardous": False,
+    },
+    "general": {
+        "recyclable": False,
+        "bin_color": "black",
+        "disposal_instructions": "Place in general waste (black bin). Not recyclable.",
+        "hazardous": False,
+    },
     "unknown": {
         "recyclable": False,
         "bin_color": "black",

@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     heatmaps_bucket: str = Field("heatmaps", alias="HEATMAPS_BUCKET")
 
     # Model
-    model_path: str = Field("yolov8n-seg.pt", alias="MODEL_PATH")
-    yolo_conf: float = Field(0.82, alias="YOLO_CONF")
+    model_path: str = Field("kendrickfff/waste-classification-yolov8-ken", alias="MODEL_PATH")
+    yolo_conf: float = Field(0.5, alias="YOLO_CONF")
     yolo_iou: float = Field(0.5, alias="YOLO_IOU")
 
     # Security

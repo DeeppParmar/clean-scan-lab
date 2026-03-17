@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Recycle, Leaf, AlertTriangle, Trash2, Package, Cpu, Wine, Layers } from "lucide-react";
+import { Recycle, Leaf, AlertTriangle, Trash2, Package, Cpu, Wine, Layers, Shirt } from "lucide-react";
 import type { ScanResult, WasteCategory } from "@/types/detection";
 import { CATEGORY_COLORS, CATEGORY_LABELS } from "@/utils/colorMap";
 import { DetectionOverlay } from "./DetectionOverlay";
@@ -18,6 +18,8 @@ const categoryIcons: Record<WasteCategory, React.ElementType> = {
   paper: Recycle,
   ewaste: AlertTriangle,
   glass: Wine,
+  textile: Shirt,
+  general: Trash2,
   mixed: Layers,
   unknown: Trash2,
 };

@@ -5,6 +5,8 @@ export type WasteCategory =
   | "paper"
   | "ewaste"
   | "glass"
+  | "textile"
+  | "general"
   | "mixed"
   | "unknown";
 
