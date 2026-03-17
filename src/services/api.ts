@@ -7,16 +7,22 @@ const api = axios.create({
 });
 
 export async function analyzeScan(file: File): Promise<ScanResult> {
-  const formData = new FormData();
-  formData.append("file", file);
-  const { data } = await api.post<ScanResult>("/api/scan", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+  // Convert File to base64 string
+  const base64Str = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+
+  const { data } = await api.post<ScanResult>("/api/analyze", {
+    image: base64Str,
   });
   return data;
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const { data } = await api.get<DashboardStats>("/api/dashboard/stats");
+  const { data } = await api.get<DashboardStats>("/api/stats");
   return data;
 }
 
@@ -25,7 +31,7 @@ export async function getScanHistory(
   limit: number = 20,
   category?: string
 ): Promise<ScanResult[]> {
-  const { data } = await api.get<ScanResult[]>("/api/scans", {
+  const { data } = await api.get<ScanResult[]>("/api/history", {
     params: { offset, limit, category },
   });
   return data;
