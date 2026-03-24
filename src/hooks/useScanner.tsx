@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback } from "react";
 import type { ScanResult, ScanStatus } from "@/types/detection";
-import { MOCK_SCAN_RESULT } from "@/utils/mockData";
+import { analyzeScan } from "@/services/api";
 
 interface ScanState {
   status: ScanStatus;
@@ -57,16 +57,21 @@ const ScanContext = createContext<ScanContextType | null>(null);
 export function ScanProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(scanReducer, initialState);
 
-  const analyze = useCallback(() => {
+  const analyze = useCallback(async () => {
+    if (!state.file) {
+      dispatch({ type: "ANALYZE_ERROR", error: "No image file provided." });
+      return;
+    }
+    
     dispatch({ type: "START_ANALYZE" });
-    // Simulate API call with mock data
-    setTimeout(() => {
-      dispatch({
-        type: "ANALYZE_SUCCESS",
-        result: { ...MOCK_SCAN_RESULT, image_url: state.previewUrl || "" },
-      });
-    }, 1800);
-  }, [state.previewUrl]);
+    try {
+      const result = await analyzeScan(state.file);
+      dispatch({ type: "ANALYZE_SUCCESS", result });
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.detail || err.message || "Failed to analyze image";
+      dispatch({ type: "ANALYZE_ERROR", error: errorMsg });
+    }
+  }, [state.file]);
 
   return (
     <ScanContext.Provider value={{ ...state, dispatch, analyze }}>
