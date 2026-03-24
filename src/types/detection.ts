@@ -27,12 +27,12 @@ export interface ScanResult {
   scan_id: string;
   timestamp: string;
   image_url: string;
-  heatmap_urls?: Record<WasteCategory, string>;
+  heatmap_urls?: Record<string, string>;
   detections: Detection[];
   dominant_category: WasteCategory;
   dominant_count: number;
   eco_score: number;
-  object_counts: Record<WasteCategory, number>;
+  object_counts: Record<string, number>;
   latency_ms: number;
 }
 
@@ -42,8 +42,8 @@ export interface DashboardStats {
   top_category: WasteCategory;
   avg_eco_score: number;
   sorted_correctly_pct: number;
-  category_distribution: Record<WasteCategory, number>;
-  daily_scans: { date: string; count: number; avg_eco_score: number }[];
+  category_distribution: Record<string, number>;
+  daily_trend: { date: string; scan_count: number; avg_eco_score: number }[];
 }
 
 export interface HealthStatus {

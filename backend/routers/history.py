@@ -1,8 +1,6 @@
 """
 EcoLens — /api/history router
 """
-from __future__ import annotations
-
 from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
 

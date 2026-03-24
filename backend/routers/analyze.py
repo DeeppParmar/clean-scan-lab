@@ -2,8 +2,6 @@
 EcoLens — /api/analyze router
 POST endpoint that runs the full scan pipeline.
 """
-from __future__ import annotations
-
 import time
 import uuid
 from collections import Counter

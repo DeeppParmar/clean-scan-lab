@@ -3,7 +3,7 @@ import { getScoreColor } from "@/utils/ecoScore";
 
 interface DayScan {
   date: string;
-  count: number;
+  scan_count: number;
   avg_eco_score: number;
 }
 
@@ -44,7 +44,7 @@ export function DailyBarChart({ data }: Props) {
                 `Avg score: ${props.payload.avg_eco_score}`,
               ]}
             />
-            <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+            <Bar dataKey="scan_count" radius={[4, 4, 0, 0]}>
               {data.map((entry, i) => (
                 <Cell key={i} fill={getScoreColor(entry.avg_eco_score)} />
               ))}

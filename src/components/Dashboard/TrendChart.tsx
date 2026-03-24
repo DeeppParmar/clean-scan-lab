@@ -3,7 +3,7 @@ import { getScoreColor } from "@/utils/ecoScore";
 
 interface DayScan {
   date: string;
-  count: number;
+  scan_count: number;
   avg_eco_score: number;
 }
 

@@ -38,14 +38,14 @@ export const MOCK_DASHBOARD_STATS: DashboardStats = {
   avg_eco_score: 68,
   sorted_correctly_pct: 84,
   category_distribution: { plastic: 412, organic: 298, metal: 187, paper: 156, ewaste: 89, glass: 105, unknown: 0 },
-  daily_scans: [
-    { date: "Mar 11", count: 42, avg_eco_score: 65 },
-    { date: "Mar 12", count: 38, avg_eco_score: 71 },
-    { date: "Mar 13", count: 55, avg_eco_score: 58 },
-    { date: "Mar 14", count: 47, avg_eco_score: 73 },
-    { date: "Mar 15", count: 61, avg_eco_score: 68 },
-    { date: "Mar 16", count: 53, avg_eco_score: 75 },
-    { date: "Mar 17", count: 12, avg_eco_score: 72 },
+  daily_trend: [
+    { date: "Mar 11", scan_count: 42, avg_eco_score: 65 },
+    { date: "Mar 12", scan_count: 38, avg_eco_score: 71 },
+    { date: "Mar 13", scan_count: 55, avg_eco_score: 58 },
+    { date: "Mar 14", scan_count: 47, avg_eco_score: 73 },
+    { date: "Mar 15", scan_count: 61, avg_eco_score: 68 },
+    { date: "Mar 16", scan_count: 53, avg_eco_score: 75 },
+    { date: "Mar 17", scan_count: 12, avg_eco_score: 72 },
   ],
 };
 

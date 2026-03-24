@@ -1,8 +1,6 @@
 """
 EcoLens — /api/stats router
 """
-from __future__ import annotations
-
 from fastapi import APIRouter
 
 from models.schemas import DashboardStats

@@ -4,7 +4,6 @@ Microsoft Sustainability AI Project, 2026
 
 Lifespan manages model startup (once) and graceful shutdown.
 """
-from __future__ import annotations
 
 import sys
 from contextlib import asynccontextmanager

@@ -3,8 +3,6 @@ EcoLens — WebSocket stream router
 Implements producer/consumer pattern with client-side frame queue.
 ByteTrack tracker is per-connection (isolated state).
 """
-from __future__ import annotations
-
 import asyncio
 import time
 import uuid
