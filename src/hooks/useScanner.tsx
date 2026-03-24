@@ -67,8 +67,16 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await analyzeScan(state.file);
       dispatch({ type: "ANALYZE_SUCCESS", result });
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.detail || err.message || "Failed to analyze image";
+      const detail = err.response?.data?.detail;
+      let errorMsg = "Failed to analyze image";
+      if (typeof detail === "string") {
+        errorMsg = detail;
+      } else if (Array.isArray(detail)) {
+        errorMsg = detail.map(d => `${d.loc?.join('.')}: ${d.msg}`).join(', ');
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      
       dispatch({ type: "ANALYZE_ERROR", error: errorMsg });
     }
   }, [state.file]);
