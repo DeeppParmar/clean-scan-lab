@@ -1,6 +1,7 @@
 """
 EcoLens — Grad-CAM Heatmap Service (per-class)
-Generates one heatmap per unique detected category and uploads to Supabase Storage.
+Generates one heatmap per unique detected category using MobileNetV2
+and uploads to Supabase Storage.
 """
 from __future__ import annotations
 
@@ -31,9 +32,10 @@ def _get_detector():
     return _detector
 
 
+# MobileNetV2 expects 224×224 input
 _preprocess = transforms.Compose([
     transforms.ToPILImage(),
-    transforms.Resize((640, 640)),
+    transforms.Resize((224, 224)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
@@ -66,9 +68,10 @@ async def generate_heatmaps(
             if class_idx is None:
                 continue
 
-            # Target the second-to-last Conv layer in the YOLOv8 backbone
-            target_layers = [det_service.model.model.model[-2]]
-            cam = GradCAM(model=det_service.model.model, target_layers=target_layers)
+            # Target the last Conv layer in MobileNetV2 features backbone
+            # MobileNetV2.features[-1] is the last InvertedResidual block
+            target_layers = [det_service.classifier.features[-1]]
+            cam = GradCAM(model=det_service.classifier, target_layers=target_layers)
             targets = [ClassifierOutputTarget(class_idx)]
 
             input_tensor = _preprocess_image(image)
@@ -76,7 +79,7 @@ async def generate_heatmaps(
 
             # Blend jet colormap heatmap at 0.5 alpha with resized original
             img_rgb = cv2.cvtColor(
-                cv2.resize(image, (640, 640)), cv2.COLOR_BGR2RGB
+                cv2.resize(image, (224, 224)), cv2.COLOR_BGR2RGB
             ).astype(np.float32) / 255.0
 
             visualization = show_cam_on_image(

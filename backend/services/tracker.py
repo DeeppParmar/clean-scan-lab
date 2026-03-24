@@ -1,22 +1,21 @@
 """
-EcoLens — ByteTrack Tracker Service
-Each WebSocket connection gets its own TrackerSession (separate YOLO instance).
-Sharing tracker state across connections causes track ID cross-contamination.
+EcoLens — Stream Tracker Service
+Each WebSocket connection gets its own session that uses
+the shared MobileNetV2 classifier for per-frame classification.
 """
 from __future__ import annotations
 
-import asyncio
 import uuid
 from typing import Optional
 
 import numpy as np
 from loguru import logger
-from ultralytics import YOLO
 
 from config import settings
 from models.schemas import Detection
+from services.detector import detector
 from services.rule_engine import apply_rules
-from utils.label_map import LABEL_MAP
+from utils.label_map import normalize_category
 from utils.image_utils import resize_image
 
 # Max concurrent WebSocket tracker sessions
@@ -27,63 +26,66 @@ _active_sessions: dict[str, "TrackerSession"] = {}
 
 
 class TrackerSession:
-    """Owns a YOLO instance with its persistent ByteTrack state."""
+    """Owns a classification context for a WebSocket stream connection."""
 
     def __init__(self, connection_id: str) -> None:
         self.id = connection_id
+        self._last_category: Optional[str] = None
+        self._stable_count: int = 0  # frames with same category
         logger.info(f"TrackerSession created [{connection_id}]")
-        self._model = YOLO(settings.model_path)
-        try:
-            self._model.model.half()
-        except Exception:
-            pass  # FP32 fallback
 
     def track_frame(self, frame: np.ndarray) -> list[Detection]:
-        """Run ByteTrack inference on one frame. Returns tracked detections."""
-        frame = resize_image(frame, max_size=640)
-        results = self._model.track(
-            frame,
-            persist=True,
-            conf=settings.yolo_conf,
-            tracker="bytetrack.yaml",
-            verbose=False,
-        )
+        """Classify one frame using the shared MobileNetV2 model.
+        Uses temporal smoothing: only changes output after 3 consecutive
+        frames with a different classification to reduce flickering."""
+        import cv2
+        from PIL import Image
+        import torch
 
-        detections: list[Detection] = []
         h, w = frame.shape[:2]
 
-        for result in results:
-            if result.boxes is None:
-                continue
-            for i, box in enumerate(result.boxes):
-                confidence = float(box.conf[0])
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                area_ratio = ((x2 - x1) * (y2 - y1)) / (w * h)
-                if area_ratio < 0.01:
-                    continue
+        # Convert BGR → RGB PIL → tensor
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_img = Image.fromarray(rgb)
+        tensor = detector.transform(pil_img).unsqueeze(0).to(detector.device)
 
-                cls_idx = int(box.cls[0])
-                category, label = LABEL_MAP.get(cls_idx, ("unknown", "Unknown Object"))
-                bbox = [x1 / w, y1 / h, x2 / w, y2 / h]
+        with torch.no_grad():
+            logits = detector.classifier(tensor)
+            probs = torch.softmax(logits, dim=1)
 
-                # ByteTrack ID
-                track_id: Optional[int] = None
-                if result.boxes.id is not None and i < len(result.boxes.id):
-                    track_id = int(result.boxes.id[i])
+        confidence_val, idx = probs.max(1)
+        confidence_val = confidence_val.item()
+        raw_category = detector._class_names[idx.item()]
 
-                rules = apply_rules(category)
-                detections.append(
-                    Detection(
-                        id=str(uuid.uuid4()),
-                        label=label,
-                        category=category,
-                        confidence=confidence,
-                        bbox=bbox,
-                        track_id=track_id,
-                        **rules,
-                    )
-                )
-        return detections
+        # Confidence gate
+        if confidence_val < 0.40:
+            return []
+
+        category, label = normalize_category(raw_category)
+
+        # Temporal smoothing — reduce flickering in video stream
+        if category == self._last_category:
+            self._stable_count += 1
+        else:
+            self._stable_count = 1
+            self._last_category = category
+
+        # Only report after 2 stable frames
+        if self._stable_count < 2:
+            return []
+
+        rules = apply_rules(category, count=1)
+        return [
+            Detection(
+                id=str(uuid.uuid4()),
+                label=label,
+                category=category,
+                confidence=confidence_val,
+                bbox=[0.0, 0.0, 1.0, 1.0],
+                track_id=1,  # single tracked classification
+                **rules,
+            )
+        ]
 
     def close(self) -> None:
         logger.info(f"TrackerSession closed [{self.id}]")

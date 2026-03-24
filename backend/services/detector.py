@@ -1,10 +1,11 @@
 """
-EcoLens — YOLOv8 Detector Service
+EcoLens — Waste Classifier Service
 Singleton — loaded ONCE via FastAPI lifespan, never reloaded.
-Detection runs in ThreadPoolExecutor so the event loop stays free.
+Inference runs in ThreadPoolExecutor so the event loop stays free.
 
-Now uses a waste-trained YOLOv8 model (12 waste-specific classes)
-instead of the generic COCO model.
+Uses a fine-tuned MobileNetV2 (12 waste-specific classes) trained on
+the garbage_classification dataset.  NO generic COCO YOLO — the classifier
+operates on the whole image (or on user-provided crops).
 """
 from __future__ import annotations
 
@@ -22,20 +23,18 @@ from PIL import Image
 import cv2
 
 from loguru import logger
-from ultralytics import YOLO
 
 from config import settings
 from models.schemas import Detection
 from services.rule_engine import apply_rules
-from utils.label_map import LABEL_MAP, normalize_category
+from utils.label_map import normalize_category
 from utils.image_utils import resize_image
 
 
 class DetectorService:
-    """Singleton detector pipeline: YOLOv8 (localization) + MobileNetV2 (classification)"""
+    """Singleton classifier pipeline: MobileNetV2 whole-image classification."""
 
     def __init__(self) -> None:
-        self._yolo: Optional[YOLO] = None
         self._classifier: Optional[torch.nn.Module] = None
         self._class_names: list[str] = []
         self._transform = None
@@ -48,65 +47,78 @@ class DetectorService:
     def load(self) -> None:
         """
         Called ONCE inside FastAPI lifespan startup.
-        Loads standard YOLOv8 for localization and fine-tuned MobileNetV2 for classification.
+        Loads fine-tuned MobileNetV2 for 12-class waste classification.
         """
         import json
         import os
 
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # 1. Load YOLO for bounding boxes
-        logger.info(f"Loading YOLO localization model: yolov8n.pt")
-        self._yolo = YOLO("yolov8n.pt")
-
-        # 2. Load custom MobileNetV2 Classifier
+        # 1. Load class names
         classes_path = "waste_classifier_classes.json"
-        
-        # Load classes if available, otherwise fallback to default list
         if os.path.exists(classes_path):
             with open(classes_path, "r") as f:
                 self._class_names = json.load(f)
-            logger.info(f"Loaded {len(self._class_names)} custom classes for MobileNet")
+            logger.info(f"Loaded {len(self._class_names)} classes: {self._class_names}")
         else:
             logger.warning(f"Could not find {classes_path}, using default classes")
-            self._class_names = ["plastic", "metal", "glass", "paper", "cardboard", "trash"]
+            self._class_names = [
+                "battery", "biological", "brown-glass", "cardboard", "clothes",
+                "green-glass", "metal", "paper", "plastic", "shoes", "trash", "white-glass"
+            ]
 
-        self._classifier = models.mobilenet_v2(pretrained=False)
+        # 2. Build MobileNetV2 with matching classifier head
+        self._classifier = models.mobilenet_v2(weights=None)
         self._classifier.classifier = nn.Sequential(
             nn.Dropout(0.3),
-            nn.Linear(self._classifier.last_channel, len(self._class_names))
+            nn.Linear(self._classifier.last_channel, 512),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(512, len(self._class_names)),
         )
-        
+
+        # 3. Load trained weights
         weights_path = "waste_classifier.pth"
         if os.path.exists(weights_path):
-             self._classifier.load_state_dict(
-                 torch.load(weights_path, map_location=self._device)
-             )
-             logger.info(f"Successfully loaded MobileNetV2 weights from {weights_path}")
+            self._classifier.load_state_dict(
+                torch.load(weights_path, map_location=self._device)
+            )
+            logger.info(f"Loaded MobileNetV2 weights from {weights_path}")
         else:
-             logger.warning(f"CRITICAL: {weights_path} not found! MobileNet will output random predictions until trained.")
+            logger.warning(
+                f"CRITICAL: {weights_path} not found! "
+                "Run `python train_classifier.py` to train the model first."
+            )
 
         self._classifier.to(self._device)
         self._classifier.eval()
 
+        # 4. Standard ImageNet preprocessing
         self._transform = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ])
 
-        # Warm-up
-        dummy = np.zeros((640, 640, 3), dtype=np.uint8)
-        self._yolo(dummy, verbose=False)
         self.is_loaded = True
-        logger.info("Two-stage waste detection pipeline ready ✓")
+        logger.info("Waste classification pipeline ready ✓")
 
     @property
-    def model(self) -> YOLO:
-        # Compatibility property if needed elsewhere
-        if self._yolo is None:
+    def classifier(self) -> torch.nn.Module:
+        """Access the MobileNetV2 model (used by heatmap service)."""
+        if self._classifier is None:
             raise RuntimeError("DetectorService.load() has not been called")
-        return self._yolo
+        return self._classifier
+
+    @property
+    def device(self) -> torch.device:
+        if self._device is None:
+            raise RuntimeError("DetectorService.load() has not been called")
+        return self._device
+
+    @property
+    def transform(self):
+        return self._transform
 
     async def detect(self, image: np.ndarray) -> list[Detection]:
         """
@@ -121,91 +133,63 @@ class DetectorService:
     # ─── Internal inference (runs in worker thread) ───────────────────────────
 
     def _run_inference(self, image: np.ndarray) -> list[Detection]:
+        """
+        Single-stage whole-image classification.
+        The input image IS the waste item to classify.
+        """
+        h, w = image.shape[:2]
 
-        # Resize image for YOLO
-        img_for_yolo = resize_image(image, max_size=640)
-        h, w = img_for_yolo.shape[:2]
-        
-        # Original image dimensions for extracting proper crops
-        orig_h, orig_w = image.shape[:2]
-        scale_x = orig_w / w
-        scale_y = orig_h / h
+        # Convert BGR numpy → RGB PIL → tensor
+        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        pil_img = Image.fromarray(rgb)
+        tensor = self._transform(pil_img).unsqueeze(0).to(self._device)
 
-        # STAGE 1: YOLO finds bounding boxes 
-        # Lower confidence because we don't care about its class predictions
-        results = self._yolo(
-            img_for_yolo, conf=0.35, iou=0.5, agnostic_nms=True, verbose=False
+        # Classify
+        with torch.no_grad():
+            logits = self._classifier(tensor)
+            probs = torch.softmax(logits, dim=1)
+
+        # Get top prediction
+        confidence_val, idx = probs.max(1)
+        confidence_val = confidence_val.item()
+        raw_category = self._class_names[idx.item()]
+
+        # Get top-3 for logging
+        top3_probs, top3_idx = probs.topk(3, dim=1)
+        top3_info = [
+            f"{self._class_names[top3_idx[0][i].item()]}: {top3_probs[0][i].item():.2%}"
+            for i in range(3)
+        ]
+        logger.debug(f"Top-3 predictions: {', '.join(top3_info)}")
+
+        # Confidence gate — reject if model is not confident enough
+        if confidence_val < 0.40:
+            logger.debug(
+                f"Low confidence ({confidence_val:.2%}) for '{raw_category}' — "
+                "no detection returned"
+            )
+            return []
+
+        # Map raw category to standardized category + human label
+        category, label = normalize_category(raw_category)
+
+        # Build detection — bbox covers the full image
+        rules = apply_rules(category, count=1)
+        detection = Detection(
+            id=str(uuid4()),
+            label=label,
+            category=category,
+            confidence=confidence_val,
+            bbox=[0.0, 0.0, 1.0, 1.0],  # full image
+            mask_points=None,
+            **rules,
         )
 
-        detections: list[Detection] = []
-        valid_items = []
-        category_counts = {}
-
-        for result in results:
-            for i, box in enumerate(result.boxes):
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-
-                # Area filter: discard detections covering < 2% of image
-                area_ratio = ((x2 - x1) * (y2 - y1)) / (w * h)
-                if area_ratio < 0.02:
-                    continue
-                
-                # Scale coordinates back to original image size for cropping
-                orig_x1, orig_y1 = int(x1 * scale_x), int(y1 * scale_y)
-                orig_x2, orig_y2 = int(x2 * scale_x), int(y2 * scale_y)
-                
-                # Ensure coordinates are within bounds
-                orig_x1, orig_y1 = max(0, orig_x1), max(0, orig_y1)
-                orig_x2, orig_y2 = min(orig_w, orig_x2), min(orig_h, orig_y2)
-
-                # STAGE 2: Crop + classify with MobileNet
-                crop = image[orig_y1:orig_y2, orig_x1:orig_x2]
-                if crop.size == 0 or crop.shape[0] == 0 or crop.shape[1] == 0:
-                    continue
-
-                pil_img = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
-                tensor = self._transform(pil_img).unsqueeze(0).to(self._device)
-
-                with torch.no_grad():
-                    logits = self._classifier(tensor)
-                    probs = torch.softmax(logits, dim=1)
-                    confidence, idx = probs.max(1)
-                
-                confidence_val = confidence.item()
-                raw_category = self._class_names[idx.item()]
-                
-                # Only keep if classifier is confident
-                if confidence_val < 0.60:
-                    continue
-                
-                # Map raw category from MobileNet to standard categories used by rule_engine
-                category, label = normalize_category(raw_category)
-                
-                category_counts[category] = category_counts.get(category, 0) + 1
-                
-                # Normalize bounding box for API output (0.0 to 1.0)
-                norm_bbox = [x1 / w, y1 / h, x2 / w, y2 / h]
-                valid_items.append((result, i, confidence_val, norm_bbox, category, label))
-
-        # Build Detection objects with count-aware rules
-        for result, i, confidence_val, norm_bbox, category, label in valid_items:
-            # Note: MobileNet pipeline loses masks unless we run Seg YOLO and project masks manually.
-            # Using basic bounding box only for this pipeline version.
-            rules = apply_rules(category, category_counts[category])
-            detections.append(
-                Detection(
-                    id=str(uuid4()),
-                    label=label,
-                    category=category,
-                    confidence=confidence_val,
-                    bbox=norm_bbox,
-                    mask_points=None,
-                    **rules,
-                )
-            )
-
-        logger.debug(f"Inference complete — {len(detections)} detections")
-        return detections
+        logger.debug(
+            f"Classification: {label} ({category}) — "
+            f"confidence {confidence_val:.2%}"
+        )
+        return [detection]
 
 
 # Module-level singleton

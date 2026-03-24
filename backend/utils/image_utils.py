@@ -59,6 +59,8 @@ def annotate_image(image: np.ndarray, detections: list) -> np.ndarray:
         "metal":    (180, 180, 180),
         "paper":    (255, 200, 0),
         "glass":    (255, 100, 200),
+        "textile":  (200, 0, 200),
+        "general":  (80, 80, 80),
         "unknown":  (100, 100, 100),
     }
 

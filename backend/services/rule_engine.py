@@ -80,8 +80,8 @@ def apply_rules(category: str, count: int = 1) -> dict:
     Adds dynamic suggestions when count > 3."""
     base = RULES.get(category, RULES["unknown"]).copy()
 
-    # Add dynamic suggestion and rename for API compatibility
-    suggestion = base.pop("disposal_instructions")
+    # Build suggestion from disposal instructions
+    suggestion = base["disposal_instructions"]
     if count > 3 and category in BULK_SUGGESTIONS:
         suggestion += BULK_SUGGESTIONS[category]
 

@@ -22,10 +22,8 @@ class Settings(BaseSettings):
     scan_results_bucket: str = Field("scan-results", alias="SCAN_RESULTS_BUCKET")
     heatmaps_bucket: str = Field("heatmaps", alias="HEATMAPS_BUCKET")
 
-    # Model
-    model_path: str = Field("kendrickfff/waste-classification-yolov8-ken", alias="MODEL_PATH")
-    yolo_conf: float = Field(0.55, alias="YOLO_CONF")
-    yolo_iou: float = Field(0.5, alias="YOLO_IOU")
+    # Classifier confidence threshold
+    classifier_conf: float = Field(0.40, alias="CLASSIFIER_CONF")
 
     # Security
     max_image_size_mb: int = Field(10, alias="MAX_IMAGE_SIZE_MB")
