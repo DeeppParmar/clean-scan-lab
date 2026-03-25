@@ -51,7 +51,7 @@ export function DetectionOverlay({ detections, hoveredId, onHover }: Props) {
               {/* Bounding Box Stroke */}
               <motion.rect
                 initial={{ opacity: 0, pathLength: 0 }}
-                animate={{ opacity: isHovered ? 1 : 0.2, pathLength: 1 }}
+                animate={{ opacity: isHovered ? 1 : 0.6, pathLength: 1 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
                 x={`${x1 * 100}%`}
                 y={`${y1 * 100}%`}
@@ -60,7 +60,7 @@ export function DetectionOverlay({ detections, hoveredId, onHover }: Props) {
                 rx="4"
                 fill="none"
                 stroke={color}
-                strokeWidth={isHovered ? "2.5" : "1"}
+                strokeWidth={isHovered ? "2.5" : "1.5"}
                 className={isHovered ? "drop-shadow-[0_0_8px_rgba(0,0,0,0.8)] pointer-events-auto" : "pointer-events-auto"}
               />
 
@@ -70,7 +70,7 @@ export function DetectionOverlay({ detections, hoveredId, onHover }: Props) {
                 y={`calc(${y1 * 100}% - 24px)`}
                 width="160"
                 height="24"
-                className={`transition-opacity duration-200 pointer-events-none ${isHovered ? 'opacity-100 z-50' : 'opacity-0'}`}
+                className={`transition-opacity duration-200 pointer-events-none ${isHovered ? 'opacity-100 z-50' : 'opacity-0 group-hover:opacity-100'}`}
               >
                 <div
                   className="text-[10px] font-mono px-2 py-1 rounded shadow-lg font-bold truncate"

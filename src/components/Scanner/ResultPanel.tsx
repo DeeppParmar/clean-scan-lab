@@ -66,17 +66,20 @@ export function ResultPanel({ result, previewUrl }: Props) {
         
         {/* Left: Annotated Image Viewer */}
         {previewUrl && (
-          <div className="flex-1 relative rounded-2xl overflow-hidden bg-bg-surface/60 border border-border/80 shadow-[0_0_30px_rgba(0,0,0,0.5)] group flex items-center justify-center p-3 sm:min-h-[450px]">
-            <img 
-              src={previewUrl} 
-              alt="Scanned material" 
-              className="w-auto h-auto max-w-full max-h-[550px] object-contain transition-transform duration-700 group-hover:scale-[1.01]" 
-            />
-            <DetectionOverlay 
-              detections={result.detections} 
-              hoveredId={hoveredId} 
-              onHover={setHoveredId} 
-            />
+          <div className="flex-1 rounded-2xl overflow-hidden bg-bg-surface/60 border border-border/80 shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center justify-center p-3 sm:min-h-[450px]">
+            {/* Tightly bound wrapper mapping absolute SVG coordinates to exact image size */}
+            <div className="relative inline-block max-w-full max-h-[550px] group">
+              <img 
+                src={previewUrl} 
+                alt="Scanned material" 
+                className="w-auto h-auto max-w-full max-h-[550px] object-contain transition-transform duration-700" 
+              />
+              <DetectionOverlay 
+                detections={result.detections} 
+                hoveredId={hoveredId} 
+                onHover={setHoveredId} 
+              />
+            </div>
           </div>
         )}
 
