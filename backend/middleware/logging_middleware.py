@@ -17,7 +17,7 @@ def configure_logging() -> None:
     """Called once at startup to configure loguru sinks."""
     logger.remove()
     # Human-readable to stdout in dev, JSON in prod
-    logger.add(sys.stdout, serialize=True, level="INFO", enqueue=True)
+    logger.add(sys.stdout, serialize=False, level="INFO", enqueue=True)
     logger.add(
         "logs/ecolens.log",
         serialize=True,

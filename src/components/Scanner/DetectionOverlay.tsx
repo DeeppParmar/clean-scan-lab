@@ -5,10 +5,13 @@ import { CATEGORY_COLORS } from "@/utils/colorMap";
 interface Props {
   detections: Detection[];
   hoveredId?: string | null;
+  hoveredCategoryIds?: Set<string>;
   onHover?: (id: string | null) => void;
 }
 
-export function DetectionOverlay({ detections, hoveredId, onHover }: Props) {
+export function DetectionOverlay({ detections, hoveredId, hoveredCategoryIds, onHover }: Props) {
+  const hasAnyHover = !!hoveredId || (hoveredCategoryIds && hoveredCategoryIds.size > 0);
+
   return (
     <svg className="absolute inset-0 z-10 w-full h-full pointer-events-auto">
       <AnimatePresence>
@@ -16,8 +19,10 @@ export function DetectionOverlay({ detections, hoveredId, onHover }: Props) {
           const [x1, y1, x2, y2] = det.bbox;
           const color = CATEGORY_COLORS[det.category] ?? "#6B7C6F";
           const isHovered = hoveredId === det.id;
-          const opacity = hoveredId ? (isHovered ? 1 : 0.3) : 1;
-          const zIndex = isHovered ? 20 : 10;
+          const isInCategory = hoveredCategoryIds?.has(det.id) ?? false;
+          const isHighlighted = isHovered || isInCategory;
+          const opacity = hasAnyHover ? (isHighlighted ? 1 : 0.15) : 1;
+          const zIndex = isHighlighted ? 20 : 10;
 
           // Convert normalized mask points to SVG polygon points (0-100%)
           // Fallback to bbox if mask_points are missing
@@ -39,7 +44,7 @@ export function DetectionOverlay({ detections, hoveredId, onHover }: Props) {
               {/* Mask Polygon */}
               <motion.polygon
                 initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: isHovered ? 0.3 : 0, scale: 1 }}
+                animate={{ opacity: isHighlighted ? 0.3 : 0, scale: 1 }}
                 transition={{ duration: 0.4, ease: "easeOut" }}
                 points={polygonPoints}
                 fill={color}
@@ -51,7 +56,7 @@ export function DetectionOverlay({ detections, hoveredId, onHover }: Props) {
               {/* Bounding Box Stroke */}
               <motion.rect
                 initial={{ opacity: 0, pathLength: 0 }}
-                animate={{ opacity: isHovered ? 1 : 0.6, pathLength: 1 }}
+                animate={{ opacity: isHighlighted ? 1 : 0.6, pathLength: 1 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
                 x={`${x1 * 100}%`}
                 y={`${y1 * 100}%`}
@@ -60,8 +65,8 @@ export function DetectionOverlay({ detections, hoveredId, onHover }: Props) {
                 rx="4"
                 fill="none"
                 stroke={color}
-                strokeWidth={isHovered ? "2.5" : "1.5"}
-                className={isHovered ? "drop-shadow-[0_0_8px_rgba(0,0,0,0.8)] pointer-events-auto" : "pointer-events-auto"}
+                strokeWidth={isHighlighted ? "2.5" : "1.5"}
+                className={isHighlighted ? "drop-shadow-[0_0_8px_rgba(0,0,0,0.8)] pointer-events-auto" : "pointer-events-auto"}
               />
 
               {/* Label Tag */}
@@ -70,7 +75,7 @@ export function DetectionOverlay({ detections, hoveredId, onHover }: Props) {
                 y={`calc(${y1 * 100}% - 24px)`}
                 width="160"
                 height="24"
-                className={`transition-opacity duration-200 pointer-events-none ${isHovered ? 'opacity-100 z-50' : 'opacity-0 group-hover:opacity-100'}`}
+                className={`transition-opacity duration-200 pointer-events-none ${isHighlighted ? 'opacity-100 z-50' : 'opacity-0 group-hover:opacity-100'}`}
               >
                 <div
                   className="text-[10px] font-mono px-2 py-1 rounded shadow-lg font-bold truncate"
