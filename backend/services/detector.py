@@ -208,6 +208,11 @@ class DetectorService:
                 confidence_val = confidence.item()
                 raw_category = self._class_names[idx.item()]
                 
+                # HEURISTIC: Prevent MobileNet from hallucinating "clothes/shoes" on crumpled plastic wrappers
+                if raw_category in ["clothes", "shoes", "textile"]:
+                    if confidence_val < 0.95:
+                        raw_category = "plastic"
+                
                 # Only keep if classifier is confident
                 if confidence_val < settings.classifier_conf:
                     continue
