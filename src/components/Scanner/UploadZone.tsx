@@ -98,10 +98,10 @@ export function UploadZone() {
     <div className="flex flex-col gap-4 h-full">
       <div
         className={cn(
-          "relative flex-1 bg-bg-surface border rounded-xl overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all duration-300 min-h-[300px]",
+          "relative flex-1 bg-bg-surface/50 border rounded-xl overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all duration-300 min-h-[300px] backdrop-blur-sm shadow-inner group",
           isDragging
-            ? "border-solid border-accent-green bg-accent-green/5"
-            : "border-dashed border-accent-green/40 hover:border-accent-green hover:bg-accent-green/[0.03]"
+            ? "border-solid border-accent-green bg-accent-green/10 shadow-[0_0_30px_hsl(var(--accent-green)/0.15)]"
+            : "border-dashed border-accent-green/30 hover:border-accent-green/80 hover:bg-accent-green/[0.04]"
         )}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
@@ -147,14 +147,16 @@ function AnalyzeButton({ status, onAnalyze }: { status: string; onAnalyze: () =>
       onClick={onAnalyze}
       disabled={status === "loading"}
       className={cn(
-        "w-full py-4 rounded-lg font-heading font-bold text-sm flex items-center justify-center gap-2 transition-all duration-200",
+        "w-full py-4 rounded-xl font-heading font-bold text-[13px] tracking-[0.15em] flex items-center justify-center gap-3 transition-all duration-500 overflow-hidden relative group",
         status === "loading"
-          ? "bg-accent-green/20 text-accent-green cursor-wait"
-          : "bg-accent-green text-primary-foreground hover:brightness-110 active:scale-[0.98]"
+          ? "bg-accent-green/10 text-accent-green cursor-wait border border-accent-green/20"
+          : "bg-gradient-to-r from-accent-green to-accent-blue text-primary-foreground hover:shadow-[0_0_20px_hsl(var(--accent-green)/0.4)] border border-transparent hover:brightness-110 active:scale-[0.98]"
       )}
       style={status !== "loading" ? { animation: "pulse-badge 2s ease-in-out infinite" } : undefined}
       aria-label="Analyze material"
     >
+      {/* Glossy overlay effect */}
+      <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
       <ScanIcon size={18} />
       {status === "loading" ? "ANALYZING..." : "ANALYZE MATERIAL"}
     </button>

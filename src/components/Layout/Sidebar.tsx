@@ -26,8 +26,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "hidden md:flex flex-col h-full bg-bg-surface border-r border-border transition-all duration-300 ease-in-out shrink-0",
-        collapsed ? "w-16" : "w-56"
+        "hidden md:flex flex-col h-full bg-bg-surface/80 backdrop-blur-xl border-r border-border transition-all duration-300 ease-in-out shrink-0 relative z-50",
+        collapsed ? "w-16" : "w-60"
       )}
     >
       {/* Logo */}
@@ -51,15 +51,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               key={item.to}
               to={item.to}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200",
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-300 relative group overflow-hidden",
                 isActive
                   ? "bg-accent-green/10 text-accent-green"
-                  : "text-text-muted hover:text-text-primary hover:bg-muted/50"
+                  : "text-text-muted hover:text-text-primary"
               )}
               aria-label={item.label}
             >
-              <item.icon size={18} className="shrink-0" />
-              {!collapsed && <span className="font-heading font-medium">{item.label}</span>}
+              {!isActive && <div className="absolute inset-0 bg-white/5 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-0" />}
+              <item.icon size={18} className="shrink-0 relative z-10" />
+              {!collapsed && <span className="font-heading font-medium tracking-wide relative z-10">{item.label}</span>}
             </NavLink>
           );
         })}

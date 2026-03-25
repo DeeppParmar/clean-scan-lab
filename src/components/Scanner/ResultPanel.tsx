@@ -89,21 +89,26 @@ export function ResultPanel({ result, previewUrl }: Props) {
       )}
 
       {/* Composition Summary Panel */}
-      <div className="px-4 py-3 border-b border-border/50 bg-bg-base/30">
-        <p className="text-[10px] font-mono text-text-muted uppercase mb-2">Composition</p>
-        <div className="flex flex-wrap gap-2">
+      <div className="px-5 py-4 border-b border-border/40 bg-bg-base/40 backdrop-blur-md relative overflow-hidden">
+        {/* Subtle top inner shadow/glow */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none" />
+        <p className="text-[10px] font-mono text-text-muted uppercase mb-3 tracking-widest font-semibold flex items-center gap-2">
+          <Layers size={12} className="opacity-50" />
+          Composition Breakdown
+        </p>
+        <div className="flex flex-wrap gap-2.5 relative z-10">
           {composition.map((item) => {
             const color = CATEGORY_COLORS[item.category] ?? "#6B7C6F";
             const label = CATEGORY_LABELS[item.category] ?? item.category;
             return (
               <div
                 key={item.category}
-                className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border/50"
-                style={{ backgroundColor: `${color}10` }}
+                className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-white/5 shadow-sm transition-all hover:border-white/10"
+                style={{ backgroundColor: `${color}15`, boxShadow: `0 0 10px ${color}08` }}
               >
-                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
-                <span className="text-xs font-heading font-medium text-text-primary">{label}</span>
-                <span className="text-[10px] font-mono text-text-muted font-bold ml-1">{item.percentage}%</span>
+                <div className="w-2 h-2 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: color, color }} />
+                <span className="text-xs font-heading font-medium text-text-primary tracking-wide">{label}</span>
+                <span className="text-[10px] font-mono text-text-muted font-bold ml-1 bg-bg-base/50 px-1.5 rounded-sm">{item.percentage}%</span>
               </div>
             );
           })}
@@ -127,8 +132,9 @@ export function ResultPanel({ result, previewUrl }: Props) {
               transition={{ delay: i * 0.05, duration: 0.3, ease: "easeOut" }}
               onMouseEnter={() => setHoveredId(det.id)}
               onMouseLeave={() => setHoveredId(null)}
-              className={`p-3 rounded-lg border transition-all duration-200 cursor-pointer 
-                ${isHovered ? 'bg-bg-base border-border scale-[1.01] shadow-md' : 'bg-bg-base/40 border-border/50 hover:bg-bg-base/60'}`}
+              className={`p-3.5 rounded-xl border transition-all duration-300 cursor-pointer overflow-hidden relative
+                ${isHovered ? 'bg-bg-surface border-border scale-[1.015] shadow-lg shadow-black/50 z-10' : 'bg-bg-base/40 border-border/30 hover:bg-bg-base/80 hover:border-border/60'}
+              `}
               style={{ borderLeftWidth: 4, borderLeftColor: color }}
             >
               <div className="flex items-center gap-3">

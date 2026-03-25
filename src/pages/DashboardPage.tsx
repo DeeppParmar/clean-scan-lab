@@ -61,8 +61,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           title="Total Scans"
-          value={stats.total_scans.toLocaleString()}
-          subtitle={`+${stats.total_today} today`}
+          value={(stats.total_scans || 0).toLocaleString()}
+          subtitle={`+${stats.total_today || 0} today`}
           icon={<ScanLine size={16} />}
         />
         <KPICard
@@ -73,14 +73,14 @@ export default function DashboardPage() {
         />
         <KPICard
           title="Avg Eco Score"
-          value={stats.avg_eco_score}
+          value={stats.avg_eco_score || 0}
           subtitle="Last 7 days"
           icon={<TrendingUp size={16} />}
-          color={getScoreColor(stats.avg_eco_score)}
+          color={getScoreColor(stats.avg_eco_score || 0)}
         />
         <KPICard
           title="Correctly Sorted"
-          value={`${stats.sorted_correctly_pct}%`}
+          value={`${stats.sorted_correctly_pct || 0}%`}
           subtitle="Accuracy rate"
           icon={<CheckCircle size={16} />}
         />
@@ -91,8 +91,8 @@ export default function DashboardPage() {
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <WasteDonut data={stats.category_distribution} />
-        <DailyBarChart data={stats.daily_trend} />
+        <WasteDonut data={stats.category_distribution || {}} />
+        <DailyBarChart data={stats.daily_trend || []} />
       </div>
 
       {/* Scan history */}

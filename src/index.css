@@ -4,49 +4,49 @@
 
 @layer base {
   :root {
-    --bg-base: 150 12% 5%;
-    --bg-surface: 150 12% 8%;
-    --accent-green: 150 66% 55%;
+    --bg-base: 0 0% 0%;
+    --bg-surface: 240 6% 6%;
+    --accent-green: 188 86% 53%; /* Now Electric Cyan, keeping class name to avoid breaking refs */
     --accent-amber: 37 90% 55%;
-    --accent-red: 0 78% 58%;
-    --accent-blue: 211 68% 54%;
+    --accent-red: 350 89% 60%;
+    --accent-blue: 210 100% 66%;
     --accent-paper: 32 48% 67%;
-    --accent-metal: 50 3% 52%;
-    --accent-glass: 158 70% 37%;
-    --text-primary: 140 12% 92%;
-    --text-muted: 150 10% 45%;
-    --border-subtle: 0 0% 100% / 0.07;
+    --accent-metal: 220 10% 45%;
+    --accent-glass: 170 70% 45%;
+    --text-primary: 0 0% 98%;
+    --text-muted: 240 5% 65%;
+    --border-subtle: 0 0% 100% / 0.08;
 
     /* shadcn mappings */
-    --background: 150 12% 5%;
-    --foreground: 140 12% 92%;
-    --card: 150 12% 8%;
-    --card-foreground: 140 12% 92%;
-    --popover: 150 12% 8%;
-    --popover-foreground: 140 12% 92%;
-    --primary: 150 66% 55%;
-    --primary-foreground: 150 12% 5%;
-    --secondary: 150 12% 8%;
-    --secondary-foreground: 140 12% 92%;
-    --muted: 150 12% 12%;
-    --muted-foreground: 150 10% 45%;
-    --accent: 150 12% 12%;
-    --accent-foreground: 140 12% 92%;
-    --destructive: 0 78% 58%;
-    --destructive-foreground: 140 12% 92%;
-    --border: 0 0% 100% / 0.07;
-    --input: 0 0% 100% / 0.07;
-    --ring: 150 66% 55%;
+    --background: 0 0% 0%;
+    --foreground: 0 0% 98%;
+    --card: 240 6% 6%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 6% 6%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 188 86% 53%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 240 6% 8%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 6% 12%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 6% 12%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 350 89% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 100% / 0.08;
+    --input: 0 0% 100% / 0.08;
+    --ring: 188 86% 53%;
     --radius: 0.75rem;
 
-    --sidebar-background: 150 12% 6%;
-    --sidebar-foreground: 140 12% 92%;
-    --sidebar-primary: 150 66% 55%;
-    --sidebar-primary-foreground: 150 12% 5%;
-    --sidebar-accent: 150 12% 10%;
-    --sidebar-accent-foreground: 140 12% 92%;
-    --sidebar-border: 0 0% 100% / 0.07;
-    --sidebar-ring: 150 66% 55%;
+    --sidebar-background: 0 0% 2%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 188 86% 53%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 240 6% 9%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 100% / 0.08;
+    --sidebar-ring: 188 86% 53%;
   }
 }
 
