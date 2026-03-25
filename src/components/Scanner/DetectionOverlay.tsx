@@ -39,19 +39,19 @@ export function DetectionOverlay({ detections, hoveredId, onHover }: Props) {
               {/* Mask Polygon */}
               <motion.polygon
                 initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: isHovered ? 0.4 : 0.2, scale: 1 }}
-                whileHover={{ opacity: 0.5 }}
+                animate={{ opacity: isHovered ? 0.3 : 0, scale: 1 }}
                 transition={{ duration: 0.4, ease: "easeOut" }}
                 points={polygonPoints}
                 fill={color}
                 // Convert percentage strings to numeric for SVG geometry
                 transform-origin={`${(x1 + x2) * 50}% ${(y1 + y2) * 50}%`}
+                className="pointer-events-auto"
               />
 
               {/* Bounding Box Stroke */}
               <motion.rect
                 initial={{ opacity: 0, pathLength: 0 }}
-                animate={{ opacity: isHovered ? 1 : 0.5, pathLength: 1 }}
+                animate={{ opacity: isHovered ? 1 : 0.2, pathLength: 1 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
                 x={`${x1 * 100}%`}
                 y={`${y1 * 100}%`}
@@ -60,8 +60,8 @@ export function DetectionOverlay({ detections, hoveredId, onHover }: Props) {
                 rx="4"
                 fill="none"
                 stroke={color}
-                strokeWidth={isHovered ? "2" : "1"}
-                className="drop-shadow-[0_0_8px_rgba(0,0,0,0.6)]"
+                strokeWidth={isHovered ? "2.5" : "1"}
+                className={isHovered ? "drop-shadow-[0_0_8px_rgba(0,0,0,0.8)] pointer-events-auto" : "pointer-events-auto"}
               />
 
               {/* Label Tag */}
@@ -70,7 +70,7 @@ export function DetectionOverlay({ detections, hoveredId, onHover }: Props) {
                 y={`calc(${y1 * 100}% - 24px)`}
                 width="160"
                 height="24"
-                className={`transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                className={`transition-opacity duration-200 pointer-events-none ${isHovered ? 'opacity-100 z-50' : 'opacity-0'}`}
               >
                 <div
                   className="text-[10px] font-mono px-2 py-1 rounded shadow-lg font-bold truncate"

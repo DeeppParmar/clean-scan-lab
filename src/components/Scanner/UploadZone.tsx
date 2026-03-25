@@ -73,8 +73,12 @@ export function UploadZone() {
   if (previewUrl) {
     return (
       <div className="flex flex-col gap-4 h-full">
-        <div className="relative flex-1 bg-bg-surface border border-border rounded-xl overflow-hidden min-h-[300px]">
-          <img src={previewUrl} alt="Uploaded scan" className="w-full h-full object-contain" />
+        <div className="relative w-full h-full min-h-[300px] flex items-center justify-center p-4 bg-bg-surface border border-border rounded-xl overflow-hidden">
+          <img
+            src={previewUrl}
+            alt="Preview"
+            className="max-w-full max-h-[350px] lg:max-h-[400px] object-contain rounded-lg shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+          />
           <button
             onClick={reset}
             className="absolute top-3 right-3 z-30 p-1.5 rounded-md bg-bg-base/60 backdrop-blur text-text-muted hover:text-text-primary transition-colors"
