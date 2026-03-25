@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     heatmaps_bucket: str = Field("heatmaps", alias="HEATMAPS_BUCKET")
 
     # Classifier confidence threshold
-    classifier_conf: float = Field(0.40, alias="CLASSIFIER_CONF")
+    classifier_conf: float = Field(0.20, alias="CLASSIFIER_CONF")
 
     # Security
     max_image_size_mb: int = Field(10, alias="MAX_IMAGE_SIZE_MB")

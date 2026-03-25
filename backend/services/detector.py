@@ -155,9 +155,11 @@ class DetectorService:
         scale_y = orig_h / h
 
         # STAGE 1: YOLO finds bounding boxes 
-        # Lower confidence because we don't care about its class predictions
+        # Extremely low YOLO confidence stringency to ensure maximum object recall. 
+        # We rely entirely on MobileNetV2 downstream to sort valid rubbish from noise.
+        # iou=0.8 and agnostic_nms=False to prevent deletion of items stacked inside/on top of each other
         results = self._yolo(
-            img_for_yolo, conf=0.10, iou=0.5, agnostic_nms=True, verbose=False
+            img_for_yolo, conf=0.04, iou=0.8, agnostic_nms=False, verbose=False
         )
 
         detections: list[Detection] = []
@@ -168,9 +170,10 @@ class DetectorService:
             for i, box in enumerate(result.boxes):
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
 
-                # Area filter: discard detections covering < 1% of image
+                # Area filter: discard detections covering < 0.2% of image
+                # Setting this extremely low captures small elements like pills/lids in cluttered bins
                 area_ratio = ((x2 - x1) * (y2 - y1)) / (w * h)
-                if area_ratio < 0.01:
+                if area_ratio < 0.002:
                     continue
                 
                 # Scale coordinates back to original image size for cropping
