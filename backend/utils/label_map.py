@@ -34,15 +34,15 @@ def normalize_category(raw_category: str) -> tuple[str, str]:
     
     # Map common dataset categories to our internal schema
     if raw in ["plastic"]:
-        return ("plastic", "Plastic Item")
+        return ("plastic", "Plastic")
     elif raw in ["metal"]:
-        return ("metal", "Metal Item")
+        return ("metal", "Metal Component")
     elif raw in ["glass", "brown-glass", "green-glass", "white-glass"]:
         return ("glass", "Glass")
     elif raw in ["paper", "cardboard"]:
         return ("paper", "Paper / Cardboard")
     elif raw in ["battery"]:
-        return ("ewaste", "Battery (E-Waste)")
+        return ("ewaste", "E-Waste / Hazardous")
     elif raw in ["biological", "organic", "food"]:
         return ("organic", "Organic Waste")
     elif raw in ["clothes", "shoes", "textile"]:

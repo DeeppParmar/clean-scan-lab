@@ -155,11 +155,11 @@ class DetectorService:
         scale_y = orig_h / h
 
         # STAGE 1: YOLO finds bounding boxes 
-        # conf=0.08 is very low so we don't miss things.
-        # iou=0.45 and agnostic_nms=False removes duplicate boxes of the SAME object,
-        # but allows overlapping boxes of DIFFERENT YOLO classes in cluttered bins.
+        # conf=0.08 is extremely low so we don't miss things.
+        # iou=0.55 and agnostic_nms=True strips out double/triple box hallucination over the same object
+        # irrespective of what initial class YOLO thought it was.
         results = self._yolo(
-            img_for_yolo, conf=0.08, iou=0.45, agnostic_nms=False, verbose=False
+            img_for_yolo, conf=0.08, iou=0.55, agnostic_nms=True, verbose=False
         )
 
         detections: list[Detection] = []
