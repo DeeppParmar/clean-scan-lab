@@ -50,6 +50,7 @@ class DetectorService:
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # 1. Load YOLO for bounding boxes
+        logger.info("Model loading wait...")
         logger.info(f"Loading YOLO localization model: yolov8n.pt")
         self._yolo = YOLO("yolov8n.pt")
 
