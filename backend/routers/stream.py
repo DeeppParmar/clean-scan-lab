@@ -14,6 +14,7 @@ from loguru import logger
 from models.schemas import StreamResult
 from services.eco_scorer import calculate_eco_score
 from services.tracker import active_session_count, create_session, remove_session
+from services.detector import detector
 from utils.image_utils import decode_jpeg_bytes
 
 router = APIRouter()
@@ -64,7 +65,6 @@ async def stream(websocket: WebSocket):
 
     # ── Frame processor ────────────────────────────────────────────────────────
     async def processor():
-        loop = asyncio.get_event_loop()
         try:
             while True:
                 data = await frame_queue.get()
@@ -73,9 +73,10 @@ async def stream(websocket: WebSocket):
                     continue
 
                 t0 = time.perf_counter()
-                detections = await loop.run_in_executor(
-                    None, tracker.track_frame, frame
-                )
+                
+                # Use the optimized robust YOLO + MobileNet batch inference pipeline
+                detections = await detector.detect(frame)
+                
                 latency_ms = round((time.perf_counter() - t0) * 1000, 1)
 
                 eco_score = calculate_eco_score(detections)
