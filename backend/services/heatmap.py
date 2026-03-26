@@ -1,6 +1,8 @@
-"""EcoLens — Grad-CAM Heatmap Generation (MobileNetV2 focused)
 """
-import iom typing import Optional
+EcoLens — Grad-CAM Heatmap Generation (MobileNetV2 focused)
+"""
+import io
+from typing import Optional
 
 import cv2
 import numpy as np

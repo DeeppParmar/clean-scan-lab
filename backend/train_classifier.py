@@ -4,11 +4,9 @@ Trains on the 12-class garbage_classification dataset and saves
 waste_classifier.pth + waste_classifier_classes.json
 
 Usage:
-    cd backend
-    python train_classifier.py
-"""
 
-import oson
+
+import json
 import os
 import sys
 import time
