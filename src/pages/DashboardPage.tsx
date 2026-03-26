@@ -57,7 +57,7 @@ export default function DashboardPage() {
         <div className="w-12 h-12 rounded-full bg-surface-elevated/50 flex items-center justify-center mb-4 border border-element/20">
            <Settings2 className="text-text-muted" size={24} />
         </div>
-        <p className="text-sm font-mono text-accent-red">{error || "No data available"}</p>
+        <p className="text-sm font-mono text-accent-red">{typeof error === 'string' ? error : "No data available"}</p>
         <p className="text-xs font-mono text-text-muted mt-2">Make sure the backend is running, or provide your Ngrok URL if testing remotely.</p>
         
         <form 
@@ -142,7 +142,7 @@ export default function DashboardPage() {
 
       {/* Trend chart */}
       <motion.div variants={item}>
-        <TrendChart data={stats.daily_trend} />
+        <TrendChart data={stats.daily_trend || []} />
       </motion.div>
 
       {/* Charts row */}
