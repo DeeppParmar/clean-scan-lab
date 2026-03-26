@@ -169,6 +169,8 @@ class DetectorService:
 
         for result in results:
             for i, box in enumerate(result.boxes):
+                if int(box.cls[0].item()) == 0:  # Skip 'person' class in COCO
+                    continue
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
 
                 # Area filters: 

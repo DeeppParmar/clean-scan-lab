@@ -91,7 +91,7 @@ export function UploadZone() {
   if (isWebcam) {
     return (
       <div className="flex flex-col gap-4 h-full relative">
-        <div className="relative flex-1 bg-bg-surface border border-border rounded-xl overflow-hidden min-h-[500px] lg:min-h-[600px] shadow-lg">
+        <div className="relative flex-1 bg-bg-surface border border-border rounded-xl overflow-hidden min-h-[45vh] lg:min-h-[500px] shadow-lg">
           {/* Scan line */}
           <div className="absolute inset-0 z-20 pointer-events-none overflow-hidden">
             <div className="w-full h-0.5 bg-accent-green/50 shadow-[0_0_15px_hsl(var(--accent-green))] animate-scan-line" />
