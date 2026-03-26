@@ -80,10 +80,12 @@ async def stream(websocket: WebSocket):
                 latency_ms = round((time.perf_counter() - t0) * 1000, 1)
 
                 eco_score = calculate_eco_score(detections)
+                object_counts = {}
                 if detections:
                     categories = [d.category for d in detections]
                     unique = set(categories)
                     dominant_category = "mixed" if len(unique) > 1 else categories[0]
+                    object_counts = dict(Counter(categories))
                 else:
                     dominant_category = None
 
@@ -92,6 +94,7 @@ async def stream(websocket: WebSocket):
                     detections=detections,
                     eco_score=eco_score,
                     dominant_category=dominant_category,
+                    object_counts=object_counts,
                     latency_ms=latency_ms,
                 )
                 await websocket.send_json(result.model_dump())

@@ -95,4 +95,5 @@ class StreamResult(BaseModel):
     detections: list[Detection] = []
     eco_score: float = 0.0
     dominant_category: Optional[str] = None
+    object_counts: dict[str, int] = {}
     latency_ms: float = 0.0
