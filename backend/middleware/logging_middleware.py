@@ -1,8 +1,6 @@
 """
-EcoLens — Structured Logging Middleware (loguru)
-Intercepts every request/response to emit JSON-serialised log records.
+EcoLens — Request/Response Logging Middleware
 """
-from __future__ import annotations
 
 import sys
 import time

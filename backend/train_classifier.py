@@ -7,9 +7,8 @@ Usage:
     cd backend
     python train_classifier.py
 """
-from __future__ import annotations
 
-import json
+import oson
 import os
 import sys
 import time

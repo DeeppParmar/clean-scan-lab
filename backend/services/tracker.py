@@ -1,17 +1,16 @@
 """
-EcoLens — Stream Tracker Service
-Each WebSocket connection gets its own session that uses
-the shared MobileNetV2 classifier for per-frame classification.
+EcoLens — ByteTrack Interface
 """
+
 from __future__ import annotations
 
 import uuid
+from collections import deque
 from typing import Optional
 
 import numpy as np
 from loguru import logger
 
-from config import settings
 from models.schemas import Detection
 from services.detector import detector
 from services.rule_engine import apply_rules

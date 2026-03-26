@@ -1,13 +1,6 @@
 """
-EcoLens — Waste Classifier Service
-Singleton — loaded ONCE via FastAPI lifespan, never reloaded.
-Inference runs in ThreadPoolExecutor so the event loop stays free.
-
-Uses YOLOv8 (yolov8n.pt) for localization (finding generic objects).
-Each cropped object is then classified by a fine-tuned MobileNetV2
-(12 waste-specific classes).
+EcoLens — Hybrid Visual Detector (YOLO + MobileNetV2)
 """
-from __future__ import annotations
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor

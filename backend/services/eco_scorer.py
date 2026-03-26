@@ -1,11 +1,6 @@
 """
-EcoLens — Eco-Scorer v3
-Score 0–100 with confidence weighting, heavier category penalties,
-and diversity penalty for mixed waste.
+EcoLens — Eco Score Calculation
 """
-from __future__ import annotations
-
-from collections import Counter
 
 from models.schemas import Detection
 from utils.label_map import RECYCLABILITY_WEIGHTS

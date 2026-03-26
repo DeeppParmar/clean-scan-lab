@@ -1,11 +1,6 @@
+"""EcoLens — Grad-CAM Heatmap Generation (MobileNetV2 focused)
 """
-EcoLens — Grad-CAM Heatmap Service (per-class)
-Generates one heatmap per unique detected category using MobileNetV2
-and uploads to Supabase Storage.
-"""
-from __future__ import annotations
-
-from typing import Optional
+import iom typing import Optional
 
 import cv2
 import numpy as np

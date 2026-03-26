@@ -10,9 +10,9 @@ export function WasteDonut({ data }: Props) {
   const chartData = Object.entries(data)
     .filter(([, v]) => v > 0)
     .map(([key, value]) => ({
-      name: CATEGORY_LABELS[key as WasteCategory],
+      name: CATEGORY_LABELS[key as WasteCategory] || (key ? key.toString() : "Unknown"),
       value,
-      color: CATEGORY_COLORS[key as WasteCategory],
+      color: CATEGORY_COLORS[key as WasteCategory] || "#888888",
     }));
 
   const total = chartData.reduce((s, d) => s + d.value, 0);

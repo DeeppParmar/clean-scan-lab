@@ -1,9 +1,6 @@
 """
-EcoLens — Dynamic Rule Engine
-Maps each waste category → disposal metadata with dynamic suggestions
-based on detection count and context.
+EcoLens — Rules & Suggestions Engine
 """
-from __future__ import annotations
 
 RULES: dict[str, dict] = {
     "plastic": {

@@ -2,7 +2,6 @@
 EcoLens — Pydantic v2 Schemas
 Request / Response models used across routers and services.
 """
-from __future__ import annotations
 
 from datetime import datetime
 from typing import Optional

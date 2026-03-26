@@ -1,8 +1,6 @@
 """
-EcoLens — Database & Storage Layer (Supabase)
-Replaces SQLite/SQLAlchemy with Supabase Postgres + Storage Buckets.
+EcoLens — Database Layer (Supabase)
 """
-from __future__ import annotations
 
 import io
 import uuid

@@ -2,7 +2,6 @@
 EcoLens — Analytics Service
 Wraps Supabase database helpers to compute dashboard statistics.
 """
-from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timedelta, date
