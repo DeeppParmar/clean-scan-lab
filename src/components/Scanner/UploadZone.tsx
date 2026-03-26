@@ -22,6 +22,9 @@ export function UploadZone() {
           streamRef.current = stream;
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
+            videoRef.current.onloadedmetadata = () => {
+              videoRef.current?.play().catch(console.error);
+            };
           }
           intervalRef.current = setInterval(() => {
              if (videoRef.current && canvasRef.current) {
@@ -87,8 +90,8 @@ export function UploadZone() {
 
   if (isWebcam) {
     return (
-      <div className="flex flex-col gap-4 h-full">
-        <div className="relative flex-1 bg-bg-surface border border-border rounded-xl overflow-hidden min-h-[300px]">
+      <div className="flex flex-col gap-4 h-full relative">
+        <div className="relative flex-1 bg-bg-surface border border-border rounded-xl overflow-hidden min-h-[500px] lg:min-h-[600px] shadow-lg">
           {/* Scan line */}
           <div className="absolute inset-0 z-20 pointer-events-none overflow-hidden">
             <div className="w-full h-0.5 bg-accent-green/50 shadow-[0_0_15px_hsl(var(--accent-green))] animate-scan-line" />
