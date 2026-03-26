@@ -16,6 +16,7 @@ from services.detector import detector
 from services.rule_engine import apply_rules
 from utils.label_map import normalize_category
 from utils.image_utils import resize_image
+from config import settings
 
 # Max concurrent WebSocket tracker sessions
 MAX_SESSIONS: int = settings.max_ws_connections
