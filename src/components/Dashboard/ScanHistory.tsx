@@ -12,12 +12,13 @@ interface Props {
 
 const FILTER_CATEGORIES: (WasteCategory | "all")[] = ["all", "plastic", "organic", "metal", "ewaste", "glass"];
 
-export function ScanHistory({ scans }: Props) {
+export function ScanHistory({ scans = [] }: Props) {
+  const safeScans = scans || [];
   const [filter, setFilter] = useState<WasteCategory | "all">("all");
   const [selectedScan, setSelectedScan] = useState<ScanResult | null>(null);
   const [visibleCount, setVisibleCount] = useState(20);
 
-  const filtered = filter === "all" ? scans : scans.filter((s) => s.dominant_category === filter);
+  const filtered = filter === "all" ? safeScans : safeScans.filter((s) => s.dominant_category === filter);
   const visible = filtered.slice(0, visibleCount);
 
   return (
