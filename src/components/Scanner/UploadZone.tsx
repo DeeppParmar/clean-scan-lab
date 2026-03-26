@@ -42,7 +42,7 @@ export function UploadZone() {
                  }
                }
              }
-          }, 200);
+          }, 400); // Send roughly 2.5 frames per second for visual stability
         })
         .catch(err => {
           console.error("Error accessing webcam:", err);

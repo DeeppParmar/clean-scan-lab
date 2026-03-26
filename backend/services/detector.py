@@ -243,11 +243,11 @@ class DetectorService:
             valid_items.append((result, i, confidence_val, norm_bbox, category, label))
 
         # Build Detection objects with count-aware rules
-        for result, i, confidence_val, norm_bbox, category, label in valid_items:
+        for det_idx, (result, i, confidence_val, norm_bbox, category, label) in enumerate(valid_items):
             rules = apply_rules(category, category_counts[category])
             detections.append(
                 Detection(
-                    id=str(uuid4()),
+                    id=f"{category}_{det_idx}",
                     label=label,
                     category=category,
                     confidence=confidence_val,
