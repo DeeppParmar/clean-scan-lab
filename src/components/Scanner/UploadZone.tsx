@@ -1,13 +1,60 @@
-import { useCallback, useState, useRef } from "react";
+import { useCallback, useState, useRef, useEffect } from "react";
 import { Upload, Camera, X } from "lucide-react";
 import { useScanner } from "@/hooks/useScanner";
 import { cn } from "@/lib/utils";
+import { DetectionOverlay } from "./DetectionOverlay";
 
 export function UploadZone() {
-  const { dispatch, previewUrl, status, isWebcam, analyze, error } = useScanner();
+  const { dispatch, previewUrl, result, status, isWebcam, analyze, error, sendFrame } = useScanner();
   const [isDragging, setIsDragging] = useState(false);
   const [fileInfo, setFileInfo] = useState<{ name: string; size: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (isWebcam) {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then(stream => {
+          streamRef.current = stream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+          intervalRef.current = setInterval(() => {
+             if (videoRef.current && canvasRef.current) {
+               const video = videoRef.current;
+               const canvas = canvasRef.current;
+               if (video.videoWidth > 0 && video.videoHeight > 0) {
+                 canvas.width = video.videoWidth;
+                 canvas.height = video.videoHeight;
+                 const ctx = canvas.getContext("2d");
+                 if (ctx) {
+                   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                   canvas.toBlob((blob) => {
+                     if (blob) sendFrame(blob);
+                   }, "image/jpeg", 0.7);
+                 }
+               }
+             }
+          }, 200);
+        })
+        .catch(err => {
+          console.error("Error accessing webcam:", err);
+          dispatch({ type: "ANALYZE_ERROR", error: "Failed to access webcam." });
+        });
+    }
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, [isWebcam, dispatch, sendFrame]);
 
   const handleFile = useCallback(
     (file: File) => {
@@ -46,26 +93,41 @@ export function UploadZone() {
           <div className="absolute inset-0 z-20 pointer-events-none overflow-hidden">
             <div className="w-full h-0.5 bg-accent-green/50 shadow-[0_0_15px_hsl(var(--accent-green))] animate-scan-line" />
           </div>
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center space-y-2">
-              <Camera size={48} className="mx-auto text-accent-green/30" />
-              <p className="text-xs font-mono text-text-muted">Camera feed active</p>
-              <div className="inline-flex items-center gap-2 bg-bg-base/60 backdrop-blur-md border border-border px-3 py-1 rounded-full">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover absolute inset-0 z-10"
+          />
+          <canvas ref={canvasRef} className="hidden" />
+          
+          {/* Real-time WebCam Detections Overlay */}
+          <div className="absolute inset-0 z-20 pointer-events-none">
+            {result && result.detections && (
+              <DetectionOverlay detections={result.detections} />
+            )}
+          </div>
+
+          <div className="flex items-center justify-center h-full relative z-20 pointer-events-none">
+            <div className="text-center space-y-2 mix-blend-difference text-white/80">
+              <Camera size={48} className="mx-auto" />
+              <p className="text-xs font-mono">Camera feed active</p>
+              <div className="inline-flex items-center gap-2 bg-black/60 backdrop-blur-md border border-white/20 px-3 py-1 rounded-full">
                 <div className="w-2 h-2 rounded-full bg-accent-green animate-pulse" />
-                <span className="text-[10px] font-mono text-text-muted uppercase tracking-tighter">Live Stream</span>
+                <span className="text-[10px] font-mono uppercase tracking-tighter">Live Stream</span>
               </div>
             </div>
           </div>
           <button
             onClick={reset}
-            className="absolute top-3 right-3 z-30 p-1.5 rounded-md bg-bg-base/60 backdrop-blur text-text-muted hover:text-text-primary transition-colors"
+            className="absolute top-3 right-3 z-30 p-1.5 rounded-md bg-bg-base/60 backdrop-blur text-text-muted hover:text-text-primary transition-colors hover:bg-black/40"
             aria-label="Close webcam"
           >
             <X size={16} />
           </button>
         </div>
-        <AnalyzeButton status={status} onAnalyze={analyze} />
-        <StatusBar status={status} error={error} latency={null} />
+        <StatusBar status={status} error={error} latency={null} streaming={true} />
       </div>
     );
   }
@@ -93,7 +155,7 @@ export function UploadZone() {
           )}
         </div>
         <AnalyzeButton status={status} onAnalyze={analyze} />
-        <StatusBar status={status} error={error} latency={null} />
+        <StatusBar status={status} error={error} latency={null} streaming={false} />
       </div>
     );
   }
@@ -140,7 +202,7 @@ export function UploadZone() {
         Use Webcam
       </button>
 
-      <StatusBar status={status} error={error} latency={null} />
+      <StatusBar status={status} error={error} latency={null} streaming={false} />
     </div>
   );
 }
@@ -171,9 +233,18 @@ function ScanIcon({ size }: { size: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><line x1="7" y1="12" x2="17" y2="12" /></svg>;
 }
 
-function StatusBar({ status, error, latency }: { status: string; error: string | null; latency: number | null }) {
+function StatusBar({ status, error, latency, streaming }: { status: string; error: string | null; latency: number | null, streaming: boolean }) {
   if (status === "error" && error) {
     return <div className="text-xs font-mono text-accent-red px-2">{error}</div>;
+  }
+  if (streaming) {
+    return (
+      <div className="flex items-center gap-2 px-2">
+        <div className="dot-wave"><span /><span /><span /></div>
+        <span className="text-xs font-mono text-accent-green">Streaming...</span>
+        {status === "success" && <span className="text-xs font-mono text-text-muted ml-auto font-bold tracking-widest text-[#a855f7]">LIVE DETECTIONS</span>}
+      </div>
+    );
   }
   if (status === "loading") {
     return (

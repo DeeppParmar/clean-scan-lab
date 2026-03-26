@@ -58,4 +58,10 @@ export async function checkHealth(): Promise<HealthStatus> {
   return data;
 }
 
+export function getWsUrl(): string {
+  const base = localStorage.getItem(CUSTOM_API_KEY) || DEFAULT_URL;
+  const wsBase = base.replace(/^http/, 'ws');
+  return `${wsBase}/ws/stream`;
+}
+
 export default api;

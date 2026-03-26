@@ -90,6 +90,10 @@ class DetectorService:
         self._classifier.to(self._device)
         self._classifier.eval()
 
+        if self._device.type == "cuda":
+            logger.info("Enabling FP16 half-precision for GPU")
+            self._classifier.half()
+
         self._transform = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
@@ -153,12 +157,15 @@ class DetectorService:
         # iou=0.55 and agnostic_nms=True strips out double/triple box hallucination over the same object
         # irrespective of what initial class YOLO thought it was.
         results = self._yolo(
-            img_for_yolo, conf=0.08, iou=0.55, agnostic_nms=True, verbose=False
+            img_for_yolo, conf=0.08, iou=0.55, agnostic_nms=True, half=(self._device.type == "cuda"), verbose=False
         )
 
         detections: list[Detection] = []
         valid_items = []
         category_counts = {}
+
+        batch_tensors = []
+        box_metadata = []
 
         for result in results:
             for i, box in enumerate(result.boxes):
@@ -187,39 +194,51 @@ class DetectorService:
                 orig_x2 = min(orig_w, orig_x2 + dw)
                 orig_y2 = min(orig_h, orig_y2 + dh)
 
-                # STAGE 2: Crop + classify with MobileNet
+                # STAGE 2: Crop + collect tensors
                 crop = image[orig_y1:orig_y2, orig_x1:orig_x2]
                 if crop.size == 0 or crop.shape[0] == 0 or crop.shape[1] == 0:
                     continue
 
                 pil_img = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
                 tensor = self._transform(pil_img).unsqueeze(0).to(self._device)
+                if self._device.type == "cuda":
+                    tensor = tensor.half()
+                
+                batch_tensors.append(tensor)
+                box_metadata.append((result, i, x1, y1, x2, y2))
+                
+        if not batch_tensors:
+            logger.debug("Inference complete — 0 detections")
+            return []
 
-                with torch.no_grad():
-                    logits = self._classifier(tensor)
-                    probs = torch.softmax(logits, dim=1)
-                    confidence, idx = probs.max(1)
-                
-                confidence_val = confidence.item()
-                raw_category = self._class_names[idx.item()]
-                
-                # HEURISTIC: Prevent MobileNet from hallucinating "clothes/shoes" on crumpled plastic wrappers
-                if raw_category in ["clothes", "shoes", "textile"]:
-                    if confidence_val < 0.95:
-                        raw_category = "plastic"
-                
-                # Only keep if classifier is confident
-                if confidence_val < settings.classifier_conf:
-                    continue
-                
-                # Map raw category from MobileNet to standard categories used by rule_engine
-                category, label = normalize_category(raw_category)
-                
-                category_counts[category] = category_counts.get(category, 0) + 1
-                
-                # Normalize bounding box for API output (0.0 to 1.0)
-                norm_bbox = [x1 / w, y1 / h, x2 / w, y2 / h]
-                valid_items.append((result, i, confidence_val, norm_bbox, category, label))
+        # Batch Inference for MobileNetV2
+        batch = torch.cat(batch_tensors, dim=0)
+        with torch.no_grad():
+            logits = self._classifier(batch)
+            probs = torch.softmax(logits, dim=1)
+            confidences, indices = probs.max(1)
+
+        for j, (result, i, x1, y1, x2, y2) in enumerate(box_metadata):
+            confidence_val = confidences[j].item()
+            raw_category = self._class_names[indices[j].item()]
+            
+            # HEURISTIC: Prevent MobileNet from hallucinating "clothes/shoes" on crumpled plastic wrappers
+            if raw_category in ["clothes", "shoes", "textile"]:
+                if confidence_val < 0.95:
+                    raw_category = "plastic"
+            
+            # Only keep if classifier is confident
+            if confidence_val < settings.classifier_conf:
+                continue
+            
+            # Map raw category from MobileNet to standard categories used by rule_engine
+            category, label = normalize_category(raw_category)
+            
+            category_counts[category] = category_counts.get(category, 0) + 1
+            
+            # Normalize bounding box for API output (0.0 to 1.0)
+            norm_bbox = [x1 / w, y1 / h, x2 / w, y2 / h]
+            valid_items.append((result, i, confidence_val, norm_bbox, category, label))
 
         # Build Detection objects with count-aware rules
         for result, i, confidence_val, norm_bbox, category, label in valid_items:
