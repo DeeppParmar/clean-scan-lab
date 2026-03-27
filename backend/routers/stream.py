@@ -75,7 +75,7 @@ async def stream(websocket: WebSocket):
                 t0 = time.perf_counter()
                 
                 # Use the optimized robust YOLO + MobileNet batch inference pipeline
-                detections = await detector.detect(frame)
+                detections = await detector.detect(frame, is_stream=True)
                 
                 latency_ms = round((time.perf_counter() - t0) * 1000, 1)
 

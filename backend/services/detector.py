@@ -129,19 +129,19 @@ class DetectorService:
     def transform(self):
         return self._transform
 
-    async def detect(self, image: np.ndarray) -> list[Detection]:
+    async def detect(self, image: np.ndarray, is_stream: bool = False) -> list[Detection]:
         """
         Non-blocking: offloads inference to ThreadPoolExecutor.
         FastAPI event loop never blocks.
         """
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
-            self._executor, self._run_inference, image
+            self._executor, self._run_inference, image, is_stream
         )
 
     # ─── Internal inference (runs in worker thread) ───────────────────────────
 
-    def _run_inference(self, image: np.ndarray) -> list[Detection]:
+    def _run_inference(self, image: np.ndarray, is_stream: bool = False) -> list[Detection]:
 
         # Resize image for YOLO
         img_for_yolo = resize_image(image, max_size=640)
@@ -153,11 +153,13 @@ class DetectorService:
         scale_y = orig_h / h
 
         # STAGE 1: YOLO finds bounding boxes 
-        # conf=0.08 is extremely low so we don't miss things.
+        # conf=0.08 is extremely low so we don't miss things (for static images).
+        # For streams, we use 0.25 to prevent flickering background noise.
         # iou=0.55 and agnostic_nms=True strips out double/triple box hallucination over the same object
         # irrespective of what initial class YOLO thought it was.
+        yolo_conf = 0.25 if is_stream else 0.08
         results = self._yolo(
-            img_for_yolo, conf=0.08, iou=0.55, agnostic_nms=True, half=(self._device.type == "cuda"), verbose=False
+            img_for_yolo, conf=yolo_conf, iou=0.55, agnostic_nms=True, half=(self._device.type == "cuda"), verbose=False
         )
 
         detections: list[Detection] = []
@@ -225,12 +227,15 @@ class DetectorService:
             raw_category = self._class_names[indices[j].item()]
             
             # HEURISTIC: Prevent MobileNet from hallucinating "clothes/shoes" on crumpled plastic wrappers
-            if raw_category in ["clothes", "shoes", "textile"]:
+            # Only apply for static image uploads (`is_stream=False`) because stream frames are unstable and this inflates "plastic" falsely.
+            if not is_stream and raw_category in ["clothes", "shoes", "textile"]:
                 if confidence_val < 0.95:
                     raw_category = "plastic"
             
             # Only keep if classifier is confident
-            if confidence_val < settings.classifier_conf:
+            # Streams require higher floor confidence to prevent flickering background noise
+            min_conf = max(0.40, settings.classifier_conf) if is_stream else settings.classifier_conf
+            if confidence_val < min_conf:
                 continue
             
             # Map raw category from MobileNet to standard categories used by rule_engine
