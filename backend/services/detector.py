@@ -208,8 +208,9 @@ class DetectorService:
                 if self._device.type == "cuda":
                     tensor = tensor.half()
                 
+                yolo_class_id = int(box.cls[0].item())
                 batch_tensors.append(tensor)
-                box_metadata.append((result, i, x1, y1, x2, y2))
+                box_metadata.append((result, i, x1, y1, x2, y2, yolo_class_id))
                 
         if not batch_tensors:
             logger.debug("Inference complete — 0 detections")
@@ -226,12 +227,27 @@ class DetectorService:
             k = min(2, num_classes)
             topk_vals, topk_indices = probs.topk(k, dim=1)
 
-        for j, (result, i, x1, y1, x2, y2) in enumerate(box_metadata):
+        for j, (result, i, x1, y1, x2, y2, yolo_class_id) in enumerate(box_metadata):
             confidence_val = topk_vals[j][0].item()
             raw_category = self._class_names[topk_indices[j][0].item()]
             
-            # Dynamic distinction: if it thinks it is textile but isn't very sure, and explicitly thinks it might be plastic
-            if raw_category in ["clothes", "shoes", "textile"] and confidence_val < 0.85 and k > 1:
+            # --- STRUCTURAL OVERRIDES using YOLO's COCO Classes ---
+            # COCO Electronics (63: laptop, 64: mouse, 65: remote, 66: keyboard, 67: cell phone)
+            if yolo_class_id in [63, 64, 65, 66, 67]:
+                raw_category = "battery" # maps to e-waste in normalize_category
+                confidence_val = max(confidence_val, 0.85)
+
+            # COCO Plastics/Glass (39: bottle, 41: cup)
+            elif yolo_class_id in [39, 41]:
+                # If YOLO strongly knows it's a bottle/cup, it is definitively NOT textile.
+                if raw_category in ["clothes", "shoes", "textile"]:
+                    raw_category = "plastic"
+                    if k > 1:
+                        # Attempt to use model's secondary confidence
+                        confidence_val = max(0.60, topk_vals[j][1].item())
+            
+            # Dynamic distinction: if it STILL thinks it is textile but isn't very sure
+            elif raw_category in ["clothes", "shoes", "textile"] and confidence_val < 0.85 and k > 1:
                 second_cat = self._class_names[topk_indices[j][1].item()]
                 second_conf = topk_vals[j][1].item()
                 if second_cat == "plastic" and second_conf > 0.05:
