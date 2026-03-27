@@ -103,14 +103,14 @@ async def stream(websocket: WebSocket):
                     best_track = None
                     
                     for track in tracked_objects:
-                        iou = compute_iou(det.box, track["bbox"])
+                        iou = compute_iou(det.bbox, track["bbox"])
                         if iou > best_iou:
                             best_iou = iou
                             best_track = track
                             
                     if best_iou > 0.35 and best_track is not None:
                         # Matched an existing object path
-                        best_track["bbox"] = det.box
+                        best_track["bbox"] = det.bbox
                         best_track["history"].append(det.category)
                         if len(best_track["history"]) > 6:
                             best_track["history"].pop(0)
@@ -130,7 +130,7 @@ async def stream(websocket: WebSocket):
                         tracked_objects.remove(best_track)
                     else:
                         # New object entered scene
-                        new_track = {"bbox": det.box, "history": [det.category], "grace": 0, "last_det": det}
+                        new_track = {"bbox": det.bbox, "history": [det.category], "grace": 0, "last_det": det}
                         active_tracks.append(new_track)
                         
                     final_detections.append(det)
