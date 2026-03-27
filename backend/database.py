@@ -94,27 +94,6 @@ async def get_total_scans() -> int:
     return resp.count or 0
 
 
-async def get_daily_trend(days: int = 7) -> list[dict[str, Any]]:
-    """
-    Returns last N days with date, scan_count, avg_eco_score.
-    Uses Supabase RPC for date aggregation.
-    """
-    client = get_supabase()
-    # Build via raw SQL through RPC or Postgres function
-    query = f"""
-        SELECT
-            DATE(timestamp) AS date,
-            COUNT(*) AS scan_count,
-            ROUND(AVG(eco_score)::numeric, 1) AS avg_eco_score
-        FROM scan_records
-        WHERE timestamp >= NOW() - INTERVAL '{days} days'
-        GROUP BY DATE(timestamp)
-        ORDER BY DATE(timestamp) DESC
-    """
-    resp = client.rpc("get_daily_trend", {"days_back": days}).execute()
-    # Fallback: use execute_sql approach via httpx
-    return resp.data or []
-
 
 async def get_category_distribution() -> dict[str, int]:
     """COUNT(*) GROUP BY dominant_category across all time."""
