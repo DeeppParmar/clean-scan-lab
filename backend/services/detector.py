@@ -222,9 +222,9 @@ class DetectorService:
             logits = self._classifier(batch)
             probs = torch.softmax(logits, dim=1)
             
-            # Look at top-2 probabilities to resolve edge case confusion dynamically
+            # Look at top probabilities to resolve edge case confusion dynamically
             num_classes = len(self._class_names)
-            k = min(2, num_classes)
+            k = min(5, num_classes)
             topk_vals, topk_indices = probs.topk(k, dim=1)
 
         for j, (result, i, x1, y1, x2, y2, yolo_class_id) in enumerate(box_metadata):
@@ -239,20 +239,38 @@ class DetectorService:
                     raw_category = "battery" # maps to e-waste in normalize_category
                     confidence_val = max(confidence_val, 0.85)
 
-            # COCO Bottles/Cups/Wine Glasses (39: bottle, 40: wine glass, 41: cup)
-            elif yolo_class_id in [39, 40, 41]:
-                if raw_category in ["clothes", "shoes", "textile"]:
-                    raw_category = "plastic"
-                    if k > 1:
-                        confidence_val = max(0.60, topk_vals[j][1].item())
+            # COCO Food Items (52 to 61 inclusive) ensure Organic/Biological accuracy
+            elif 52 <= yolo_class_id <= 61:
+                raw_category = "biological"
+                confidence_val = max(confidence_val, 0.95)
+
+            # COCO Wine Glass (40) is definitively Glass
+            elif yolo_class_id == 40:
+                if raw_category not in ["white-glass", "green-glass", "brown-glass"]:
+                    raw_category = "white-glass" 
+                confidence_val = max(confidence_val, 0.90)
+
+            # COCO Bottles/Cups (39: bottle, 41: cup)
+            elif yolo_class_id in [39, 41]:
+                valid_materials = ["plastic", "glass", "white-glass", "green-glass", "brown-glass", "metal", "paper"]
+                # If the AI hallucinated something completely wrong, check its top 5 guesses for the truth
+                if raw_category not in valid_materials:
+                    for r_rank in range(1, k):
+                        alt_cat = self._class_names[topk_indices[j][r_rank].item()]
+                        if alt_cat in valid_materials:
+                            raw_category = alt_cat
+                            confidence_val = max(0.40, topk_vals[j][r_rank].item() + 0.3)
+                            break
+                    else:
+                        raw_category = "plastic"  # Blind fallback since container mostly plastic
                 elif raw_category in ["glass", "white-glass", "green-glass", "brown-glass", "plastic"]:
-                    # Structural shape matches glass/plastic perfectly, boost confidence significantly
-                    confidence_val = min(0.96, confidence_val + 0.35)
+                    # Structural shape matches perfectly, boost confidence significantly
+                    confidence_val = min(0.98, confidence_val + 0.35)
                 
-            # COCO Metals/Cans usually predicted as 42-45 generic boxes or MobileNet finds it weak
+            # COCO Metals/Cans usually predicted as generic boxes or MobileNet finds it weak
             elif raw_category in ["metal", "battery", "trash"]:
-                # Boost weak metals so they aren't masked out by the stream stability floor
-                confidence_val = min(0.92, confidence_val + 0.25)
+                # Massive boost to weak metals so they aren't masked out by the stream stability floor
+                confidence_val = min(0.96, confidence_val + 0.35)
             
             # Dynamic distinction: if it STILL thinks it is textile but isn't very sure
             elif raw_category in ["clothes", "shoes", "textile"] and confidence_val < 0.85:
