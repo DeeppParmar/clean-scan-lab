@@ -65,6 +65,8 @@ async def stream(websocket: WebSocket):
 
     # ── Frame processor ────────────────────────────────────────────────────────
     async def processor():
+        last_detections = []
+        grace_frames = 0
         try:
             while True:
                 data = await frame_queue.get()
@@ -76,6 +78,19 @@ async def stream(websocket: WebSocket):
                 
                 # Use the optimized robust YOLO + MobileNet batch inference pipeline
                 detections = await detector.detect(frame, is_stream=True)
+                
+                # Simple temporal stability buffer (debouncing)
+                if not detections and last_detections and grace_frames < 3:
+                    # Keep previous detections up to 3 frames to prevent blinking
+                    detections = last_detections
+                    grace_frames += 1
+                else:
+                    if detections:
+                        last_detections = detections
+                        grace_frames = 0
+                    else:
+                        last_detections = []
+                        grace_frames = 0
                 
                 latency_ms = round((time.perf_counter() - t0) * 1000, 1)
 

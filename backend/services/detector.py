@@ -226,11 +226,8 @@ class DetectorService:
             confidence_val = confidences[j].item()
             raw_category = self._class_names[indices[j].item()]
             
-            # HEURISTIC: Prevent MobileNet from hallucinating "clothes/shoes/textile" on crumpled plastic wrappers
-            # Applies to both stream and static because the webcam naturally struggles with plastic reflections.
-            if raw_category in ["clothes", "shoes", "textile"]:
-                if confidence_val < 0.85:
-                    raw_category = "plastic"
+            # Provide raw classification outputs directly to allow textile & plastic to be uniquely detected
+            pass
             
             # Only keep if classifier is confident
             # Streams require higher floor confidence to prevent flickering background noise
