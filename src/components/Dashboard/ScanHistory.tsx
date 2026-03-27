@@ -68,7 +68,7 @@ export function ScanHistory({ scans = [] }: Props) {
                 </td>
                 <td className="px-5 py-3">
                   <div className="flex gap-1.5 flex-wrap">
-                    {scan.detections.slice(0, 3).map((d) => (
+                    {(scan.detections || []).slice(0, 3).map((d) => (
                       <span
                         key={d.id}
                         className="text-[9px] font-mono px-2 py-0.5 rounded-md border"
@@ -162,7 +162,7 @@ export function ScanHistory({ scans = [] }: Props) {
                 <div>
                   <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider block mb-2">Detections</span>
                   <div className="space-y-2">
-                    {selectedScan.detections.map((d) => (
+                    {(selectedScan.detections || []).map((d) => (
                       <div key={d.id} className="p-3 bg-bg-base/40 border border-border/50 rounded-lg">
                         <div className="flex justify-between items-baseline">
                           <span className="font-heading text-sm text-text-primary">{d.label}</span>
