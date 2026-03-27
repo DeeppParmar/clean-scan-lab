@@ -154,10 +154,10 @@ class DetectorService:
 
         # STAGE 1: YOLO finds bounding boxes 
         # conf=0.08 is extremely low so we don't miss things (for static images).
-        # For streams, we use 0.25 to prevent flickering background noise.
+        # For streams, we use 0.12 to prevent flickering background noise but keep it low enough for metals.
         # iou=0.55 and agnostic_nms=True strips out double/triple box hallucination over the same object
         # irrespective of what initial class YOLO thought it was.
-        yolo_conf = 0.25 if is_stream else 0.08
+        yolo_conf = 0.12 if is_stream else 0.08
         results = self._yolo(
             img_for_yolo, conf=yolo_conf, iou=0.55, agnostic_nms=True, half=(self._device.type == "cuda"), verbose=False
         )
@@ -220,18 +220,27 @@ class DetectorService:
         with torch.no_grad():
             logits = self._classifier(batch)
             probs = torch.softmax(logits, dim=1)
-            confidences, indices = probs.max(1)
+            
+            # Look at top-2 probabilities to resolve edge case confusion dynamically
+            num_classes = len(self._class_names)
+            k = min(2, num_classes)
+            topk_vals, topk_indices = probs.topk(k, dim=1)
 
         for j, (result, i, x1, y1, x2, y2) in enumerate(box_metadata):
-            confidence_val = confidences[j].item()
-            raw_category = self._class_names[indices[j].item()]
+            confidence_val = topk_vals[j][0].item()
+            raw_category = self._class_names[topk_indices[j][0].item()]
             
-            # Provide raw classification outputs directly to allow textile & plastic to be uniquely detected
-            pass
+            # Dynamic distinction: if it thinks it is textile but isn't very sure, and explicitly thinks it might be plastic
+            if raw_category in ["clothes", "shoes", "textile"] and confidence_val < 0.85 and k > 1:
+                second_cat = self._class_names[topk_indices[j][1].item()]
+                second_conf = topk_vals[j][1].item()
+                if second_cat == "plastic" and second_conf > 0.05:
+                    raw_category = "plastic"
+                    confidence_val = second_conf
             
             # Only keep if classifier is confident
-            # Streams require higher floor confidence to prevent flickering background noise
-            min_conf = max(0.40, settings.classifier_conf) if is_stream else settings.classifier_conf
+            # Streams require slightly higher floor confidence to prevent flickering background noise
+            min_conf = max(0.20, settings.classifier_conf) if is_stream else settings.classifier_conf
             if confidence_val < min_conf:
                 continue
             
