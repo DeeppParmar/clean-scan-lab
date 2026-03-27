@@ -177,9 +177,9 @@ class DetectorService:
 
                 # Area filters: 
                 # - discard micro detections (<0.2%)
-                # - discard massive background/container boxes (>60%)
+                # - discard massive background/container boxes (>85%)
                 area_ratio = ((x2 - x1) * (y2 - y1)) / (w * h)
-                if area_ratio < 0.002 or area_ratio > 0.60:
+                if area_ratio < 0.002 or area_ratio > 0.85:
                     continue
                 
                 # Scale coordinates back to original image size for cropping
@@ -234,25 +234,39 @@ class DetectorService:
             # --- STRUCTURAL OVERRIDES using YOLO's COCO Classes ---
             # COCO Electronics (63: laptop, 64: mouse, 65: remote, 66: keyboard, 67: cell phone)
             if yolo_class_id in [63, 64, 65, 66, 67]:
-                raw_category = "battery" # maps to e-waste in normalize_category
-                confidence_val = max(confidence_val, 0.85)
+                # Only override if MobileNet hallucinated a completely disconnected class
+                if raw_category in ["clothes", "shoes", "textile", "general", "trash"]:
+                    raw_category = "battery" # maps to e-waste in normalize_category
+                    confidence_val = max(confidence_val, 0.85)
 
-            # COCO Plastics/Glass (39: bottle, 41: cup)
-            elif yolo_class_id in [39, 41]:
-                # If YOLO strongly knows it's a bottle/cup, it is definitively NOT textile.
+            # COCO Bottles/Cups/Wine Glasses (39: bottle, 40: wine glass, 41: cup)
+            elif yolo_class_id in [39, 40, 41]:
                 if raw_category in ["clothes", "shoes", "textile"]:
                     raw_category = "plastic"
                     if k > 1:
-                        # Attempt to use model's secondary confidence
                         confidence_val = max(0.60, topk_vals[j][1].item())
+                elif raw_category in ["glass", "white-glass", "green-glass", "brown-glass", "plastic"]:
+                    # Structural shape matches glass/plastic perfectly, boost confidence significantly
+                    confidence_val = min(0.96, confidence_val + 0.35)
+                
+            # COCO Metals/Cans usually predicted as 42-45 generic boxes or MobileNet finds it weak
+            elif raw_category in ["metal", "battery", "trash"]:
+                # Boost weak metals so they aren't masked out by the stream stability floor
+                confidence_val = min(0.92, confidence_val + 0.25)
             
             # Dynamic distinction: if it STILL thinks it is textile but isn't very sure
-            elif raw_category in ["clothes", "shoes", "textile"] and confidence_val < 0.85 and k > 1:
-                second_cat = self._class_names[topk_indices[j][1].item()]
-                second_conf = topk_vals[j][1].item()
-                if second_cat == "plastic" and second_conf > 0.05:
+            elif raw_category in ["clothes", "shoes", "textile"] and confidence_val < 0.85:
+                # Weak textiles are almost universally crumpled plastic wrappers
+                if k > 1:
+                    second_cat = self._class_names[topk_indices[j][1].item()]
+                    second_conf = topk_vals[j][1].item()
+                    if second_cat == "plastic":
+                        raw_category = "plastic"
+                        confidence_val = max(0.20, second_conf)
+                    else:
+                        raw_category = "plastic"
+                else:
                     raw_category = "plastic"
-                    confidence_val = second_conf
             
             # Only keep if classifier is confident
             # Streams require slightly higher floor confidence to prevent flickering background noise

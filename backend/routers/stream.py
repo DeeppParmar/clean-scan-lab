@@ -67,9 +67,21 @@ async def stream(websocket: WebSocket):
     async def processor():
         from services.rule_engine import apply_rules
         from models.schemas import Detection
-        last_stable_detections: list[Detection] = []
-        recent_categories: list[str] = []
-        grace_frames: int = 0
+
+        def compute_iou(boxA, boxB):
+            xA = max(boxA[0], boxB[0])
+            yA = max(boxA[1], boxB[1])
+            xB = min(boxA[2], boxB[2])
+            yB = min(boxA[3], boxB[3])
+            interArea = max(0, xB - xA) * max(0, yB - yA)
+            if interArea == 0:
+                return 0.0
+            boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+            boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+            return interArea / float(boxAArea + boxBArea - interArea)
+
+        tracked_objects = []
+
         try:
             while True:
                 data = await frame_queue.get()
@@ -82,33 +94,58 @@ async def stream(websocket: WebSocket):
                 # Use the optimized robust YOLO + MobileNet batch inference pipeline
                 detections = await detector.detect(frame, is_stream=True)
                 
-                if detections:
-                    # Stabilize classifications for single-item frames (common webcam use-case)
-                    if len(detections) == 1:
-                        cat = detections[0].category
-                        recent_categories.append(cat)
-                        if len(recent_categories) > 3:
-                            recent_categories.pop(0)
-                        
-                        # Use the mode (most common category over last 3 frames)
-                        stable_cat = max(set(recent_categories), key=recent_categories.count)
-                        if stable_cat != cat:
-                            rules = apply_rules(stable_cat, 1)
-                            detections[0].category = stable_cat
-                            detections[0].label = stable_cat.capitalize()
-                            for k, v in rules.items():
-                                setattr(detections[0], k, v)
+                # --- Multi-Object IOU Tracking & Debouncing ---
+                active_tracks = []
+                final_detections = []
+                
+                for det in detections:
+                    best_iou = 0.0
+                    best_track = None
                     
-                    last_stable_detections = detections
-                    grace_frames = 0
-                else:
-                    if grace_frames < 3 and last_stable_detections:
-                        # Keep previous detections up to 3 frames to prevent blinking
-                        detections = last_stable_detections
-                        grace_frames += 1
+                    for track in tracked_objects:
+                        iou = compute_iou(det.box, track["bbox"])
+                        if iou > best_iou:
+                            best_iou = iou
+                            best_track = track
+                            
+                    if best_iou > 0.35 and best_track is not None:
+                        # Matched an existing object path
+                        best_track["bbox"] = det.box
+                        best_track["history"].append(det.category)
+                        if len(best_track["history"]) > 6:
+                            best_track["history"].pop(0)
+                        best_track["grace"] = 0
+                        best_track["last_det"] = det
+                        
+                        # Determine stabilized category mode
+                        stable_cat = max(set(best_track["history"]), key=best_track["history"].count)
+                        if stable_cat != det.category:
+                            rules = apply_rules(stable_cat, 1)
+                            det.category = stable_cat
+                            det.label = stable_cat.capitalize()
+                            for k, v in rules.items():
+                                setattr(det, k, v)
+                        
+                        active_tracks.append(best_track)
+                        tracked_objects.remove(best_track)
                     else:
-                        last_stable_detections = []
-                        recent_categories.clear()
+                        # New object entered scene
+                        new_track = {"bbox": det.box, "history": [det.category], "grace": 0, "last_det": det}
+                        active_tracks.append(new_track)
+                        
+                    final_detections.append(det)
+                
+                # Handle objects that were missed in this single frame (YOLO blink)
+                for track in tracked_objects:
+                    track["grace"] += 1
+                    if track["grace"] <= 3:
+                        active_tracks.append(track)
+                        # Re-inject ghost frame to keep UI absolutely perfectly stable without flickering
+                        final_detections.append(track["last_det"])
+                        
+                tracked_objects = active_tracks
+                detections = final_detections
+                # ----------------------------------------------
                 
                 latency_ms = round((time.perf_counter() - t0) * 1000, 1)
 
