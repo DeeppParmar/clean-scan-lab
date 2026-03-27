@@ -209,8 +209,9 @@ class DetectorService:
                     tensor = tensor.half()
                 
                 yolo_class_id = int(box.cls[0].item())
+                yolo_conf_val = float(box.conf[0].item())
                 batch_tensors.append(tensor)
-                box_metadata.append((result, i, x1, y1, x2, y2, yolo_class_id))
+                box_metadata.append((result, i, x1, y1, x2, y2, yolo_class_id, yolo_conf_val))
                 
         if not batch_tensors:
             logger.debug("Inference complete — 0 detections")
@@ -227,33 +228,33 @@ class DetectorService:
             k = min(5, num_classes)
             topk_vals, topk_indices = probs.topk(k, dim=1)
 
-        for j, (result, i, x1, y1, x2, y2, yolo_class_id) in enumerate(box_metadata):
+        for j, (result, i, x1, y1, x2, y2, yolo_class_id, yolo_conf_val) in enumerate(box_metadata):
             confidence_val = topk_vals[j][0].item()
             raw_category = self._class_names[topk_indices[j][0].item()]
             
             # --- STRUCTURAL OVERRIDES using YOLO's COCO Classes ---
             # COCO Electronics (63: laptop, 64: mouse, 65: remote, 66: keyboard, 67: cell phone)
-            if yolo_class_id in [63, 64, 65, 66, 67]:
+            if yolo_class_id in [63, 64, 65, 66, 67] and yolo_conf_val > 0.25:
                 # Only override if MobileNet hallucinated a completely disconnected class
                 if raw_category in ["clothes", "shoes", "textile", "general", "trash"]:
                     raw_category = "battery" # maps to e-waste in normalize_category
                     confidence_val = max(confidence_val, 0.85)
 
             # COCO Food Items (52 to 61 inclusive) ensure Organic/Biological accuracy
-            elif 52 <= yolo_class_id <= 61:
+            elif 52 <= yolo_class_id <= 61 and yolo_conf_val > 0.30:
                 # Shield clothing and distinct materials from being forcibly declared as food by YOLO graphic hallucinations
                 if raw_category not in ["clothes", "shoes", "textile", "metal", "glass", "white-glass", "green-glass", "brown-glass", "battery"]:
                     raw_category = "biological"
                     confidence_val = max(confidence_val, 0.95)
 
             # COCO Wine Glass (40) is definitively Glass
-            elif yolo_class_id == 40:
+            elif yolo_class_id == 40 and yolo_conf_val > 0.25:
                 if raw_category not in ["white-glass", "green-glass", "brown-glass"]:
                     raw_category = "white-glass" 
                 confidence_val = max(confidence_val, 0.90)
 
             # COCO Bottles/Cups (39: bottle, 41: cup)
-            elif yolo_class_id in [39, 41]:
+            elif yolo_class_id in [39, 41] and yolo_conf_val > 0.25:
                 valid_materials = ["plastic", "glass", "white-glass", "green-glass", "brown-glass", "metal", "paper"]
                 # If the AI hallucinated something completely wrong, check its top 5 guesses for the truth
                 if raw_category not in valid_materials:
