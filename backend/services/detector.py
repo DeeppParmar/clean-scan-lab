@@ -241,8 +241,10 @@ class DetectorService:
 
             # COCO Food Items (52 to 61 inclusive) ensure Organic/Biological accuracy
             elif 52 <= yolo_class_id <= 61:
-                raw_category = "biological"
-                confidence_val = max(confidence_val, 0.95)
+                # Shield clothing and distinct materials from being forcibly declared as food by YOLO graphic hallucinations
+                if raw_category not in ["clothes", "shoes", "textile", "metal", "glass", "white-glass", "green-glass", "brown-glass", "battery"]:
+                    raw_category = "biological"
+                    confidence_val = max(confidence_val, 0.95)
 
             # COCO Wine Glass (40) is definitively Glass
             elif yolo_class_id == 40:
