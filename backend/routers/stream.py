@@ -65,8 +65,11 @@ async def stream(websocket: WebSocket):
 
     # ── Frame processor ────────────────────────────────────────────────────────
     async def processor():
-        last_detections = []
-        grace_frames = 0
+        from services.rule_engine import apply_rules
+        from models.schemas import Detection
+        last_stable_detections: list[Detection] = []
+        recent_categories: list[str] = []
+        grace_frames: int = 0
         try:
             while True:
                 data = await frame_queue.get()
@@ -79,18 +82,33 @@ async def stream(websocket: WebSocket):
                 # Use the optimized robust YOLO + MobileNet batch inference pipeline
                 detections = await detector.detect(frame, is_stream=True)
                 
-                # Simple temporal stability buffer (debouncing)
-                if not detections and last_detections and grace_frames < 3:
-                    # Keep previous detections up to 3 frames to prevent blinking
-                    detections = last_detections
-                    grace_frames += 1
+                if detections:
+                    # Stabilize classifications for single-item frames (common webcam use-case)
+                    if len(detections) == 1:
+                        cat = detections[0].category
+                        recent_categories.append(cat)
+                        if len(recent_categories) > 3:
+                            recent_categories.pop(0)
+                        
+                        # Use the mode (most common category over last 3 frames)
+                        stable_cat = max(set(recent_categories), key=recent_categories.count)
+                        if stable_cat != cat:
+                            rules = apply_rules(stable_cat, 1)
+                            detections[0].category = stable_cat
+                            detections[0].label = stable_cat.capitalize()
+                            for k, v in rules.items():
+                                setattr(detections[0], k, v)
+                    
+                    last_stable_detections = detections
+                    grace_frames = 0
                 else:
-                    if detections:
-                        last_detections = detections
-                        grace_frames = 0
+                    if grace_frames < 3 and last_stable_detections:
+                        # Keep previous detections up to 3 frames to prevent blinking
+                        detections = last_stable_detections
+                        grace_frames += 1
                     else:
-                        last_detections = []
-                        grace_frames = 0
+                        last_stable_detections = []
+                        recent_categories.clear()
                 
                 latency_ms = round((time.perf_counter() - t0) * 1000, 1)
 
