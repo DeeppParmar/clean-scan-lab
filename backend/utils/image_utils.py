@@ -1,6 +1,4 @@
-"""
-EcoLens — Image Processing Utilities
-"""
+"""EcoLens — Image Processing Utilities"""
 
 import base64
 import io
@@ -13,8 +11,6 @@ from PIL import Image
 
 
 def decode_base64_image(b64_string: str) -> tuple[bytes, np.ndarray]:
-    """Decode base64 encoded image string → (raw_bytes, numpy_bgr_array)."""
-    # Strip data URI prefix if present
     if "," in b64_string:
         b64_string = b64_string.split(",", 1)[1]
     image_bytes = base64.b64decode(b64_string)
@@ -26,7 +22,6 @@ def decode_base64_image(b64_string: str) -> tuple[bytes, np.ndarray]:
 
 
 def decode_jpeg_bytes(data: bytes) -> Optional[np.ndarray]:
-    """Decode raw JPEG bytes from WebSocket to numpy BGR array."""
     try:
         nparr = np.frombuffer(data, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -36,7 +31,6 @@ def decode_jpeg_bytes(data: bytes) -> Optional[np.ndarray]:
 
 
 def resize_image(image: np.ndarray, max_size: int = 640) -> np.ndarray:
-    """Resize to max_size on longest side, maintaining aspect ratio."""
     h, w = image.shape[:2]
     if max(h, w) <= max_size:
         return image
@@ -47,7 +41,6 @@ def resize_image(image: np.ndarray, max_size: int = 640) -> np.ndarray:
 
 
 def annotate_image(image: np.ndarray, detections: list) -> np.ndarray:
-    """Draw bounding boxes and labels on a copy of the image."""
     img = image.copy()
     h, w = img.shape[:2]
 
@@ -82,13 +75,11 @@ def annotate_image(image: np.ndarray, detections: list) -> np.ndarray:
 
 
 def encode_image_to_jpeg_bytes(image: np.ndarray, quality: int = 90) -> bytes:
-    """Encode numpy BGR image to JPEG bytes."""
     _, buf = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])
     return buf.tobytes()
 
 
 def check_image_dimensions(image_bytes: bytes, max_dim: int = 4096) -> tuple[int, int]:
-    """Return (width, height) from raw bytes. Raises ValueError if too large."""
     try:
         img = Image.open(io.BytesIO(image_bytes))
         w, h = img.size

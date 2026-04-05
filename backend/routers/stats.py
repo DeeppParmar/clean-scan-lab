@@ -1,6 +1,4 @@
-"""
-EcoLens — /api/stats router
-"""
+"""EcoLens — /api/stats router"""
 from fastapi import APIRouter
 
 from models.schemas import DashboardStats
@@ -11,5 +9,4 @@ router = APIRouter()
 
 @router.get("/stats", response_model=DashboardStats)
 async def stats() -> DashboardStats:
-    """Dashboard statistics: totals, trends, category breakdown."""
     return await get_stats()

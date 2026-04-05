@@ -1,7 +1,4 @@
-"""
-EcoLens — Analytics Service
-Wraps Supabase database helpers to compute dashboard statistics.
-"""
+"""EcoLens — Analytics Service"""
 
 from collections import Counter
 from datetime import datetime, timedelta, date
@@ -21,14 +18,12 @@ from utils.label_map import RECYCLABLE_CATEGORIES
 
 
 async def get_stats() -> DashboardStats:
-    """Compute full dashboard statistics from Supabase."""
     total_scans = await get_total_scans()
     total_today = await get_scans_today()
     top_category = await get_top_category()
     avg_eco_score = await get_avg_eco_score()
     category_distribution = await get_category_distribution()
 
-    # sorted_correctly_pct: % of scans where dominant_category is a recyclable category
     recyclable_count = sum(
         v for k, v in category_distribution.items() if k in RECYCLABLE_CATEGORIES
     )
@@ -50,15 +45,8 @@ async def get_stats() -> DashboardStats:
 
 
 async def get_daily_trend(days: int = 7) -> list[DailyPoint]:
-    """
-    Returns last N days with date, scan_count, avg_eco_score.
-    Computed in-memory from Supabase scan_records (avoid RPC dependency).
-    """
     today = date.today()
-    # Fetch all records in the window
     records = await list_scan_records(limit=10_000, offset=0)
-
-    # Filter to last N days
     cutoff_dt = datetime.utcnow() - timedelta(days=days)
 
     day_data: dict[str, list[float]] = {}

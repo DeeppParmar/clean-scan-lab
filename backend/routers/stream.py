@@ -1,8 +1,4 @@
-"""
-EcoLens — WebSocket stream router
-Implements producer/consumer pattern with client-side frame queue.
-ByteTrack tracker is per-connection (isolated state).
-"""
+"""EcoLens — WebSocket stream router"""
 import asyncio
 import time
 import uuid
@@ -19,14 +15,13 @@ from utils.image_utils import decode_jpeg_bytes
 
 router = APIRouter()
 
-FRAME_RATE_LIMIT = 10  # Max fps to process from client
+FRAME_RATE_LIMIT = 10
 
 
 @router.websocket("/ws/stream")
 async def stream(websocket: WebSocket):
     await websocket.accept()
 
-    # ── Connection capacity check ────────────────────────────────────────────
     if active_session_count() >= 4:
         await websocket.send_json(
             {"error": "Server is at capacity (max 4 concurrent stream sessions). Try again later."}
@@ -42,18 +37,15 @@ async def stream(websocket: WebSocket):
     frame_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=2)
     logger.info(f"WebSocket stream opened [{tracker.id}]")
 
-    # ── Frame receiver ────────────────────────────────────────────────────────
     async def receiver():
         last_time = 0.0
         try:
             while True:
                 data = await websocket.receive_bytes()
                 now = time.time()
-                # Rate-limit incoming frames
                 if now - last_time < (1.0 / FRAME_RATE_LIMIT):
                     continue
                 last_time = now
-                # Backpressure: drop oldest if queue full
                 if frame_queue.full():
                     try:
                         frame_queue.get_nowait()
@@ -63,7 +55,6 @@ async def stream(websocket: WebSocket):
         except WebSocketDisconnect:
             pass
 
-    # ── Frame processor ────────────────────────────────────────────────────────
     async def processor():
         from services.rule_engine import apply_rules
         from models.schemas import Detection
@@ -90,34 +81,29 @@ async def stream(websocket: WebSocket):
                     continue
 
                 t0 = time.perf_counter()
-                
-                # Use the optimized robust YOLO + MobileNet batch inference pipeline
                 detections = await detector.detect(frame, is_stream=True)
-                
-                # --- Multi-Object IOU Tracking & Debouncing ---
+
                 active_tracks = []
                 final_detections = []
-                
+
                 for det in detections:
                     best_iou = 0.0
                     best_track = None
-                    
+
                     for track in tracked_objects:
                         iou = compute_iou(det.bbox, track["bbox"])
                         if iou > best_iou:
                             best_iou = iou
                             best_track = track
-                            
+
                     if best_iou > 0.35 and best_track is not None:
-                        # Matched an existing object path
                         best_track["bbox"] = det.bbox
                         best_track["history"].append(det.category)
                         if len(best_track["history"]) > 6:
                             best_track["history"].pop(0)
                         best_track["grace"] = 0
                         best_track["last_det"] = det
-                        
-                        # Determine stabilized category mode
+
                         stable_cat = max(set(best_track["history"]), key=best_track["history"].count)
                         if stable_cat != det.category:
                             rules = apply_rules(stable_cat, 1)
@@ -125,28 +111,24 @@ async def stream(websocket: WebSocket):
                             det.label = stable_cat.capitalize()
                             for k, v in rules.items():
                                 setattr(det, k, v)
-                        
+
                         active_tracks.append(best_track)
                         tracked_objects.remove(best_track)
                     else:
-                        # New object entered scene
                         new_track = {"bbox": det.bbox, "history": [det.category], "grace": 0, "last_det": det}
                         active_tracks.append(new_track)
-                        
+
                     final_detections.append(det)
-                
-                # Handle objects that were missed in this single frame (YOLO blink)
+
                 for track in tracked_objects:
                     track["grace"] += 1
                     if track["grace"] <= 3:
                         active_tracks.append(track)
-                        # Re-inject ghost frame to keep UI absolutely perfectly stable without flickering
                         final_detections.append(track["last_det"])
-                        
+
                 tracked_objects = active_tracks
                 detections = final_detections
-                # ----------------------------------------------
-                
+
                 latency_ms = round((time.perf_counter() - t0) * 1000, 1)
 
                 eco_score = calculate_eco_score(detections)

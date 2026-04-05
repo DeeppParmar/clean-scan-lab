@@ -1,9 +1,4 @@
-"""
-EcoLens — FastAPI Application Entry Point
-Microsoft Sustainability AI Project, 2026
-
-Lifespan manages model startup (once) and graceful shutdown.
-"""
+"""EcoLens — FastAPI Application Entry Point"""
 
 import sys
 from contextlib import asynccontextmanager
@@ -25,38 +20,28 @@ from routers import analyze, history, stats, stream
 from services.detector import detector
 
 
-# ─── Lifespan ─────────────────────────────────────────────────────────────────
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: configure logging, load model. Shutdown: nothing to tear down."""
     configure_logging()
     logger.info("EcoLens API starting up…")
-    detector.load()       # loads ONCE — singleton, never reloaded
+    detector.load()
     logger.info("EcoLens API ready ✓")
     yield
     logger.info("EcoLens API shutting down.")
 
 
-# ─── App Factory ──────────────────────────────────────────────────────────────
-
 app = FastAPI(
     title="EcoLens API",
-    description=(
-        "Smart Waste Classification & Recycling System — "
-        "Microsoft Sustainability AI, 2026"
-    ),
+    description="Smart Waste Classification & Recycling System",
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
 )
 
-# ── Rate limiter state & error handler
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# ── CORS (allow all origins in dev — restrict in prod via env)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -65,14 +50,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Structured request logging
 app.add_middleware(RequestLoggingMiddleware)
-
-# ── Static files (served locally for dev; Supabase Storage used for prod)
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-
-# ─── Routers ──────────────────────────────────────────────────────────────────
 
 app.include_router(analyze.router, prefix="/api", tags=["Analysis"])
 app.include_router(history.router, prefix="/api", tags=["History"])
@@ -80,11 +59,8 @@ app.include_router(stats.router, prefix="/api", tags=["Statistics"])
 app.include_router(stream.router, tags=["Stream"])
 
 
-# ─── Health endpoint ──────────────────────────────────────────────────────────
-
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health() -> HealthResponse:
-    """Health check — polled by frontend every 30 s. No auth required."""
     db_ok = await check_db_health()
     return HealthResponse(
         status="ok" if detector.is_loaded and db_ok else "degraded",

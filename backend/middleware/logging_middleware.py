@@ -1,6 +1,4 @@
-"""
-EcoLens — Request/Response Logging Middleware
-"""
+"""EcoLens — Request/Response Logging Middleware"""
 
 import sys
 import time
@@ -12,9 +10,7 @@ from starlette.responses import Response
 
 
 def configure_logging() -> None:
-    """Called once at startup to configure loguru sinks."""
     logger.remove()
-    # Human-readable to stdout in dev, JSON in prod
     logger.add(sys.stdout, serialize=False, level="INFO", enqueue=True)
     logger.add(
         "logs/ecolens.log",
@@ -27,8 +23,6 @@ def configure_logging() -> None:
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Logs timing, status, and path for every HTTP request."""
-
     async def dispatch(self, request: Request, call_next) -> Response:
         t0 = time.perf_counter()
         response = await call_next(request)

@@ -1,6 +1,4 @@
-"""
-EcoLens — Database Layer (Supabase)
-"""
+"""EcoLens — Database Layer (Supabase)"""
 
 import io
 import uuid
@@ -13,12 +11,10 @@ from supabase import create_client, Client
 
 from config import settings
 
-# ─── Supabase client (service-role for backend writes) ───────────────────────
 _supabase: Client | None = None
 
 
 def get_supabase() -> Client:
-    """Return the global Supabase client, initialised lazily."""
     global _supabase
     if _supabase is None:
         _supabase = create_client(settings.supabase_url, settings.supabase_service_key)
@@ -26,7 +22,6 @@ def get_supabase() -> Client:
 
 
 async def check_db_health() -> bool:
-    """Ping scan_records table to verify DB connectivity."""
     try:
         client = get_supabase()
         client.table("scan_records").select("id").limit(1).execute()
@@ -36,10 +31,7 @@ async def check_db_health() -> bool:
         return False
 
 
-# ─── Scan Record CRUD ────────────────────────────────────────────────────────
-
 async def insert_scan_record(record: dict[str, Any]) -> dict[str, Any]:
-    """Insert a scan record row into scan_records. Returns the inserted row."""
     client = get_supabase()
     data = {
         "id": record.get("id", str(uuid.uuid4())),
@@ -57,7 +49,6 @@ async def insert_scan_record(record: dict[str, Any]) -> dict[str, Any]:
 
 
 async def get_scan_record(scan_id: str) -> dict[str, Any] | None:
-    """Fetch a single scan record by UUID."""
     client = get_supabase()
     resp = (
         client.table("scan_records")
@@ -74,7 +65,6 @@ async def list_scan_records(
     offset: int = 0,
     category: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Paginated history, optionally filtered by dominant_category."""
     client = get_supabase()
     query = (
         client.table("scan_records")
@@ -94,15 +84,9 @@ async def get_total_scans() -> int:
     return resp.count or 0
 
 
-
 async def get_category_distribution() -> dict[str, int]:
-    """COUNT(*) GROUP BY dominant_category across all time."""
     client = get_supabase()
-    resp = (
-        client.table("scan_records")
-        .select("dominant_category")
-        .execute()
-    )
+    resp = client.table("scan_records").select("dominant_category").execute()
     distribution: dict[str, int] = {}
     for row in resp.data or []:
         cat = row.get("dominant_category") or "unknown"
@@ -134,10 +118,8 @@ async def get_top_category() -> str | None:
     dist = await get_category_distribution()
     if not dist:
         return None
-    return max(dist, key=dist.get)  # type: ignore[arg-type]
+    return max(dist, key=dist.get)
 
-
-# ─── Storage Helpers ─────────────────────────────────────────────────────────
 
 async def upload_image_to_storage(
     image_bytes: bytes,
@@ -146,10 +128,6 @@ async def upload_image_to_storage(
     filename: str,
     content_type: str = "image/jpeg",
 ) -> str:
-    """
-    Upload bytes to Supabase Storage bucket.
-    Returns the public URL of the uploaded file.
-    """
     client = get_supabase()
     path = f"{scan_id}/{filename}"
     try:

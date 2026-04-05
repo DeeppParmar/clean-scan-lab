@@ -37,27 +37,18 @@ class DetectorService:
         self._executor = ThreadPoolExecutor(max_workers=2)
         self.is_loaded: bool = False
 
-    # ─── Public ──────────────────────────────────────────────────────────────
-
     def load(self) -> None:
-        """
-        Called ONCE inside FastAPI lifespan startup.
-        Loads generic YOLOv8 for localization and fine-tuned MobileNetV2 for classification.
-        """
+        """Load YOLO for localization and fine-tuned MobileNetV2 for classification."""
         import json
         import os
 
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # 1. Load YOLO for bounding boxes
         logger.info("Model loading wait...")
         logger.info(f"Loading YOLO localization model: yolov8n.pt")
         self._yolo = YOLO("yolov8n.pt")
 
-        # 2. Load custom MobileNetV2 Classifier
         classes_path = "waste_classifier_classes.json"
-        
-        # Load classes if available, otherwise fallback to default list
         if os.path.exists(classes_path):
             with open(classes_path, "r") as f:
                 self._class_names = json.load(f)
@@ -77,7 +68,7 @@ class DetectorService:
             nn.Dropout(0.2),
             nn.Linear(512, len(self._class_names))
         )
-        
+
         weights_path = "waste_classifier.pth"
         if os.path.exists(weights_path):
              self._classifier.load_state_dict(
@@ -85,7 +76,7 @@ class DetectorService:
              )
              logger.info(f"Successfully loaded MobileNetV2 weights from {weights_path}")
         else:
-             logger.warning(f"CRITICAL: {weights_path} not found! MobileNet will output random predictions until trained.")
+             logger.warning(f"CRITICAL: {weights_path} not found!")
 
         self._classifier.to(self._device)
         self._classifier.eval()
@@ -100,7 +91,6 @@ class DetectorService:
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
 
-        # Warm-up
         dummy = np.zeros((640, 640, 3), dtype=np.uint8)
         self._yolo(dummy, verbose=False)
         self.is_loaded = True
@@ -114,7 +104,6 @@ class DetectorService:
 
     @property
     def classifier(self) -> torch.nn.Module:
-        """Access the MobileNetV2 model (used by heatmap service)."""
         if self._classifier is None:
             raise RuntimeError("DetectorService.load() has not been called")
         return self._classifier
@@ -130,67 +119,46 @@ class DetectorService:
         return self._transform
 
     async def detect(self, image: np.ndarray, is_stream: bool = False) -> list[Detection]:
-        """
-        Non-blocking: offloads inference to ThreadPoolExecutor.
-        FastAPI event loop never blocks.
-        """
+        """Non-blocking inference via ThreadPoolExecutor."""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
             self._executor, self._run_inference, image, is_stream
         )
 
-    # ─── Internal inference (runs in worker thread) ───────────────────────────
-
     def _run_inference(self, image: np.ndarray, is_stream: bool = False) -> list[Detection]:
-
-        # Resize image for YOLO
         img_for_yolo = resize_image(image, max_size=640)
         h, w = img_for_yolo.shape[:2]
-        
-        # Original image dimensions for extracting proper crops
         orig_h, orig_w = image.shape[:2]
         scale_x = orig_w / w
         scale_y = orig_h / h
 
-        # STAGE 1: YOLO finds bounding boxes 
-        # conf=0.08 is extremely low so we don't miss things (for static images).
-        # For streams, we use 0.12 to prevent flickering background noise but keep it low enough for metals.
-        # iou=0.55 and agnostic_nms=True strips out double/triple box hallucination over the same object
-        # irrespective of what initial class YOLO thought it was.
         yolo_conf = 0.12 if is_stream else 0.08
         results = self._yolo(
-            img_for_yolo, conf=yolo_conf, iou=0.55, agnostic_nms=True, half=(self._device.type == "cuda"), verbose=False
+            img_for_yolo, conf=yolo_conf, iou=0.55, agnostic_nms=True,
+            half=(self._device.type == "cuda"), verbose=False
         )
 
         detections: list[Detection] = []
         valid_items = []
         category_counts = {}
-
         batch_tensors = []
         box_metadata = []
 
         for result in results:
             for i, box in enumerate(result.boxes):
-                if int(box.cls[0].item()) == 0:  # Skip 'person' class in COCO
+                if int(box.cls[0].item()) == 0:
                     continue
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
 
-                # Area filters: 
-                # - discard micro detections (<0.2%)
-                # - discard massive background/container boxes (>85%)
                 area_ratio = ((x2 - x1) * (y2 - y1)) / (w * h)
                 if area_ratio < 0.002 or area_ratio > 0.85:
                     continue
-                
-                # Scale coordinates back to original image size for cropping
+
                 orig_x1, orig_y1 = int(x1 * scale_x), int(y1 * scale_y)
                 orig_x2, orig_y2 = int(x2 * scale_x), int(y2 * scale_y)
-                
-                # Ensure coordinates are within bounds
                 orig_x1, orig_y1 = max(0, orig_x1), max(0, orig_y1)
                 orig_x2, orig_y2 = min(orig_w, orig_x2), min(orig_h, orig_y2)
 
-                # Expand crop slightly (10%) to give MobileNet context
                 dw = int((orig_x2 - orig_x1) * 0.1)
                 dh = int((orig_y2 - orig_y1) * 0.1)
                 orig_x1 = max(0, orig_x1 - dw)
@@ -198,7 +166,6 @@ class DetectorService:
                 orig_x2 = min(orig_w, orig_x2 + dw)
                 orig_y2 = min(orig_h, orig_y2 + dh)
 
-                # STAGE 2: Crop + collect tensors
                 crop = image[orig_y1:orig_y2, orig_x1:orig_x2]
                 if crop.size == 0 or crop.shape[0] == 0 or crop.shape[1] == 0:
                     continue
@@ -207,23 +174,20 @@ class DetectorService:
                 tensor = self._transform(pil_img).unsqueeze(0).to(self._device)
                 if self._device.type == "cuda":
                     tensor = tensor.half()
-                
+
                 yolo_class_id = int(box.cls[0].item())
                 yolo_conf_val = float(box.conf[0].item())
                 batch_tensors.append(tensor)
                 box_metadata.append((result, i, x1, y1, x2, y2, yolo_class_id, yolo_conf_val))
-                
+
         if not batch_tensors:
             logger.debug("Inference complete — 0 detections")
             return []
 
-        # Batch Inference for MobileNetV2
         batch = torch.cat(batch_tensors, dim=0)
         with torch.no_grad():
             logits = self._classifier(batch)
             probs = torch.softmax(logits, dim=1)
-            
-            # Look at top probabilities to resolve edge case confusion dynamically
             num_classes = len(self._class_names)
             k = min(5, num_classes)
             topk_vals, topk_indices = probs.topk(k, dim=1)
@@ -231,32 +195,25 @@ class DetectorService:
         for j, (result, i, x1, y1, x2, y2, yolo_class_id, yolo_conf_val) in enumerate(box_metadata):
             confidence_val = topk_vals[j][0].item()
             raw_category = self._class_names[topk_indices[j][0].item()]
-            
-            # --- STRUCTURAL OVERRIDES using YOLO's COCO Classes ---
-            # COCO Electronics (63: laptop, 64: mouse, 65: remote, 66: keyboard, 67: cell phone)
+
+            # Structural overrides using YOLO COCO classes
             if yolo_class_id in [63, 64, 65, 66, 67] and yolo_conf_val > 0.25:
-                # Only override if MobileNet hallucinated a completely disconnected class
                 if raw_category in ["clothes", "shoes", "textile", "general", "trash"]:
-                    raw_category = "battery" # maps to e-waste in normalize_category
+                    raw_category = "battery"
                     confidence_val = max(confidence_val, 0.85)
 
-            # COCO Food Items (52 to 61 inclusive) ensure Organic/Biological accuracy
             elif 52 <= yolo_class_id <= 61 and yolo_conf_val > 0.30:
-                # Shield clothing and distinct materials from being forcibly declared as food by YOLO graphic hallucinations
                 if raw_category not in ["clothes", "shoes", "textile", "metal", "glass", "white-glass", "green-glass", "brown-glass", "battery"]:
                     raw_category = "biological"
                     confidence_val = max(confidence_val, 0.95)
 
-            # COCO Wine Glass (40) is definitively Glass
             elif yolo_class_id == 40 and yolo_conf_val > 0.25:
                 if raw_category not in ["white-glass", "green-glass", "brown-glass"]:
-                    raw_category = "white-glass" 
+                    raw_category = "white-glass"
                 confidence_val = max(confidence_val, 0.90)
 
-            # COCO Bottles/Cups (39: bottle, 41: cup)
             elif yolo_class_id in [39, 41] and yolo_conf_val > 0.25:
                 valid_materials = ["plastic", "glass", "white-glass", "green-glass", "brown-glass", "metal", "paper"]
-                # If the AI hallucinated something completely wrong, check its top 5 guesses for the truth
                 if raw_category not in valid_materials:
                     for r_rank in range(1, k):
                         alt_cat = self._class_names[topk_indices[j][r_rank].item()]
@@ -265,19 +222,14 @@ class DetectorService:
                             confidence_val = max(0.40, topk_vals[j][r_rank].item() + 0.3)
                             break
                     else:
-                        raw_category = "plastic"  # Blind fallback since container mostly plastic
+                        raw_category = "plastic"
                 elif raw_category in ["glass", "white-glass", "green-glass", "brown-glass", "plastic"]:
-                    # Structural shape matches perfectly, boost confidence significantly
                     confidence_val = min(0.98, confidence_val + 0.35)
-                
-            # COCO Metals/Cans usually predicted as generic boxes or MobileNet finds it weak
+
             elif raw_category in ["metal", "battery", "trash"]:
-                # Massive boost to weak metals so they aren't masked out by the stream stability floor
                 confidence_val = min(0.96, confidence_val + 0.35)
-            
-            # Dynamic distinction: if it STILL thinks it is textile but isn't very sure
+
             elif raw_category in ["clothes", "shoes", "textile"] and confidence_val < 0.85:
-                # Weak textiles are almost universally crumpled plastic wrappers
                 if k > 1:
                     second_cat = self._class_names[topk_indices[j][1].item()]
                     second_conf = topk_vals[j][1].item()
@@ -288,23 +240,16 @@ class DetectorService:
                         raw_category = "plastic"
                 else:
                     raw_category = "plastic"
-            
-            # Only keep if classifier is confident
-            # Streams require slightly higher floor confidence to prevent flickering background noise
+
             min_conf = max(0.20, settings.classifier_conf) if is_stream else settings.classifier_conf
             if confidence_val < min_conf:
                 continue
-            
-            # Map raw category from MobileNet to standard categories used by rule_engine
+
             category, label = normalize_category(raw_category)
-            
             category_counts[category] = category_counts.get(category, 0) + 1
-            
-            # Normalize bounding box for API output (0.0 to 1.0)
             norm_bbox = [x1 / w, y1 / h, x2 / w, y2 / h]
             valid_items.append((result, i, confidence_val, norm_bbox, category, label))
 
-        # Build Detection objects with count-aware rules
         for det_idx, (result, i, confidence_val, norm_bbox, category, label) in enumerate(valid_items):
             rules = apply_rules(category, category_counts[category])
             detections.append(
@@ -323,5 +268,4 @@ class DetectorService:
         return detections
 
 
-# Module-level singleton
 detector = DetectorService()

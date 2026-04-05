@@ -1,6 +1,4 @@
-"""
-EcoLens — /api/history router
-"""
+"""EcoLens — /api/history router"""
 from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
 
@@ -14,9 +12,8 @@ router = APIRouter()
 async def get_history(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    category: str | None = Query(None, description="Filter by dominant_category"),
+    category: str | None = Query(None),
 ):
-    """Paginated scan history (lightweight — no mask points)."""
     records = await list_scan_records(limit=limit, offset=offset, category=category)
 
     summaries: list[ScanSummary] = []
@@ -24,7 +21,7 @@ async def get_history(
         summaries.append(
             ScanSummary(
                 scan_id=str(r.get("id", "")),
-                timestamp=r.get("timestamp"),  # type: ignore[arg-type]
+                timestamp=r.get("timestamp"),
                 image_url=r.get("image_path", ""),
                 dominant_category=r.get("dominant_category"),
                 eco_score=float(r.get("eco_score") or 0.0),
@@ -37,7 +34,6 @@ async def get_history(
 
 @router.get("/history/{scan_id}", response_model=ScanResult)
 async def get_scan(scan_id: str):
-    """Full scan detail including mask points."""
     record = await get_scan_record(scan_id)
     if not record:
         raise HTTPException(status_code=404, detail=f"Scan '{scan_id}' not found")

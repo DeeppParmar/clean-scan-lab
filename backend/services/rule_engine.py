@@ -1,6 +1,4 @@
-"""
-EcoLens — Rules & Suggestions Engine
-"""
+"""EcoLens — Rules & Suggestions Engine"""
 
 RULES: dict[str, dict] = {
     "plastic": {
@@ -59,7 +57,6 @@ RULES: dict[str, dict] = {
     },
 }
 
-# Dynamic suggestion suffixes based on category count
 BULK_SUGGESTIONS: dict[str, str] = {
     "plastic": " Consider bulk recycling at a deposit centre.",
     "metal": " Large metal items may qualify for scrap metal pickup.",
@@ -73,15 +70,10 @@ BULK_SUGGESTIONS: dict[str, str] = {
 
 
 def apply_rules(category: str, count: int = 1) -> dict:
-    """Return disposal rule dict for a given category slug.
-    Adds dynamic suggestions when count > 3."""
     base = RULES.get(category, RULES["unknown"]).copy()
-
-    # Build suggestion from disposal instructions
     suggestion = base["disposal_instructions"]
     if count > 3 and category in BULK_SUGGESTIONS:
         suggestion += BULK_SUGGESTIONS[category]
-
     base["suggestion"] = suggestion
     base["action"] = "Recycle" if base["recyclable"] else "Dispose"
     return base

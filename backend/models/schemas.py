@@ -1,7 +1,4 @@
-"""
-EcoLens — Pydantic v2 Schemas
-Request / Response models used across routers and services.
-"""
+"""EcoLens — Pydantic v2 Schemas"""
 
 from datetime import datetime
 from typing import Optional
@@ -9,8 +6,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
-# ─── Core Detection ──────────────────────────────────────────────────────────
 
 class Detection(BaseModel):
     id: str
@@ -20,8 +15,6 @@ class Detection(BaseModel):
     bbox: list[float] = Field(..., min_length=4, max_length=4)
     mask_points: Optional[list[list[float]]] = None
     track_id: Optional[int] = None
-
-    # From rule engine
     recyclable: bool = False
     bin_color: str = "black"
     disposal_instructions: str = ""
@@ -29,8 +22,6 @@ class Detection(BaseModel):
     action: str = "Dispose"
     hazardous: bool = False
 
-
-# ─── Scan Result ─────────────────────────────────────────────────────────────
 
 class ScanResult(BaseModel):
     scan_id: str
@@ -46,7 +37,6 @@ class ScanResult(BaseModel):
 
 
 class ScanSummary(BaseModel):
-    """Lightweight version for history listing — no mask points."""
     scan_id: str
     timestamp: datetime
     image_url: str
@@ -56,13 +46,9 @@ class ScanSummary(BaseModel):
     latency_ms: float = 0.0
 
 
-# ─── Request ─────────────────────────────────────────────────────────────────
-
 class AnalyzeRequest(BaseModel):
-    image: str = Field(..., description="Base64-encoded JPEG/PNG/WebP image")
+    image: str = Field(..., description="Base64-encoded image")
 
-
-# ─── Stats / Dashboard ───────────────────────────────────────────────────────
 
 class DailyPoint(BaseModel):
     date: str
@@ -80,15 +66,11 @@ class DashboardStats(BaseModel):
     daily_trend: list[DailyPoint] = []
 
 
-# ─── Health ──────────────────────────────────────────────────────────────────
-
 class HealthResponse(BaseModel):
     status: str
     model_loaded: bool
     db_connected: bool
 
-
-# ─── Stream ──────────────────────────────────────────────────────────────────
 
 class StreamResult(BaseModel):
     frame_id: str
