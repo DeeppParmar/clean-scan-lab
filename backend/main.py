@@ -42,15 +42,19 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# NOTE: Starlette processes middlewares in REVERSE order of addition.
+# Adding RequestLoggingMiddleware FIRST and CORSMiddleware SECOND
+# ensures CORS runs as the outermost layer, so headers are always present.
+app.add_middleware(RequestLoggingMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
-
-app.add_middleware(RequestLoggingMiddleware)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.include_router(analyze.router, prefix="/api", tags=["Analysis"])

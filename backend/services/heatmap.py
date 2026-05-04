@@ -60,7 +60,9 @@ async def generate_heatmaps(
             cam = GradCAM(model=det_service.classifier, target_layers=target_layers)
             targets = [ClassifierOutputTarget(class_idx)]
 
-            input_tensor = _preprocess_image(image)
+            input_tensor = _preprocess_image(image).to(det_service.device)
+            if det_service.device.type == "cuda":
+                input_tensor = input_tensor.half()
             grayscale_cam = cam(input_tensor=input_tensor, targets=targets)[0]
 
             img_rgb = cv2.cvtColor(

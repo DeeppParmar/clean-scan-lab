@@ -67,9 +67,13 @@ async def analyze(
 
     annotated = annotate_image(image, detections)
     annotated_bytes = encode_image_to_jpeg_bytes(annotated)
-    image_url = await upload_image_to_storage(
-        annotated_bytes, scan_id, settings.scan_results_bucket, "result.jpg"
-    )
+    try:
+        image_url = await upload_image_to_storage(
+            annotated_bytes, scan_id, settings.scan_results_bucket, "result.jpg"
+        )
+    except Exception as exc:
+        logger.warning(f"Storage upload failed [{scan_id}], continuing without image: {exc}")
+        image_url = ""
 
     latency_so_far = (time.perf_counter() - t_start) * 1000
     heatmap_urls: dict[str, str] = {}

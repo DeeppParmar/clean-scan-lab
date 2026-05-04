@@ -4,7 +4,7 @@ Trains on the 12-class garbage_classification dataset and saves
 waste_classifier.pth + waste_classifier_classes.json
 
 Usage:
-
+"""
 
 import json
 import os
@@ -20,7 +20,7 @@ from torchvision import datasets, transforms, models
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
-DATASET_DIR = r"C:\Users\Abhi\Downloads\archive (1)\garbage_classification"
+DATASET_DIR = r"C:\Users\Abhi\.cache\kagglehub\datasets\sumn2u\garbage-classification-v2\versions\12\standardized_256"
 OUTPUT_WEIGHTS = "waste_classifier.pth"
 OUTPUT_CLASSES = "waste_classifier_classes.json"
 
@@ -193,10 +193,14 @@ def main():
     train_loader, val_loader, class_names = build_dataloaders()
     model = build_model(num_classes=len(class_names))
 
+    # Save class names immediately so Uvicorn doesn't crash if it hot-reloads mid-training
+    with open(OUTPUT_CLASSES, "w") as f:
+        json.dump(class_names, f, indent=2)
+
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 
     # ── Phase 1: Train classifier head only ─────────────────────────────
-    print("\n── Phase 1: Training classifier head (backbone frozen) ──")
+    print("\n--- Phase 1: Training classifier head (backbone frozen) ---")
     optimizer = optim.Adam(model.classifier.parameters(), lr=LEARNING_RATE)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=8)
 
@@ -224,13 +228,13 @@ def main():
         else:
             patience_counter += 1
             if patience_counter >= 3:
-                print("  Early stop in Phase 1 — moving to Phase 2")
+                print("  Early stop in Phase 1 - moving to Phase 2")
                 break
 
     print(f"  Best Phase 1 val acc: {best_val_acc:.1f}%")
 
     # ── Phase 2: Fine-tune entire network ────────────────────────────────
-    print("\n── Phase 2: Fine-tuning entire network ──")
+    print("\n--- Phase 2: Fine-tuning entire network ---")
 
     # Unfreeze backbone
     for param in model.features.parameters():
@@ -257,7 +261,7 @@ def main():
             best_val_acc = val_acc
             torch.save(model.state_dict(), OUTPUT_WEIGHTS)
             patience_counter = 0
-            marker = " ★ BEST"
+            marker = " * BEST"
         else:
             patience_counter += 1
 

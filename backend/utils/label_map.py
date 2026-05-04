@@ -1,21 +1,5 @@
 """EcoLens — Hierarchical Label Map"""
 
-LABEL_MAP: dict[int, tuple[str, str]] = {
-    0:  ("ewaste",  "Battery"),
-    1:  ("organic", "Biological Waste"),
-    2:  ("glass",   "Brown Glass"),
-    3:  ("paper",   "Cardboard"),
-    4:  ("textile", "Clothes"),
-    5:  ("glass",   "Green Glass"),
-    6:  ("metal",   "Metal"),
-    7:  ("paper",   "Paper"),
-    8:  ("plastic", "Plastic"),
-    9:  ("textile", "Shoes"),
-    10: ("general", "General Trash"),
-    11: ("glass",   "White Glass"),
-}
-
-
 def normalize_category(raw_category: str) -> tuple[str, str]:
     raw = raw_category.lower()
     if raw in ["plastic"]:
@@ -37,8 +21,8 @@ def normalize_category(raw_category: str) -> tuple[str, str]:
 
 
 CATEGORY_TO_CLASS_IDX: dict[str, int] = {
-    "plastic": 8, "organic": 1, "ewaste": 0, "metal": 6,
-    "paper": 7, "glass": 2, "textile": 4, "general": 10,
+    "plastic": 7, "organic": 1, "ewaste": 0, "metal": 5,
+    "paper": 6, "glass": 4, "textile": 3, "general": 9,
 }
 
 RECYCLABILITY_WEIGHTS: dict[str, float] = {

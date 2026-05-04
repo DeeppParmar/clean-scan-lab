@@ -56,8 +56,8 @@ class DetectorService:
         else:
             logger.warning(f"Could not find {classes_path}, using default classes")
             self._class_names = [
-                "battery", "biological", "brown-glass", "cardboard", "clothes",
-                "green-glass", "metal", "paper", "plastic", "shoes", "trash", "white-glass"
+                "battery", "biological", "cardboard", "clothes",
+                "glass", "metal", "paper", "plastic", "shoes", "trash"
             ]
 
         self._classifier = models.mobilenet_v2(weights=None)
@@ -125,6 +125,101 @@ class DetectorService:
             self._executor, self._run_inference, image, is_stream
         )
 
+    def _is_metal_material(self, crop_bgr: np.ndarray) -> bool:
+        """
+        Universal metal material detector.
+        Works on cans (crushed or intact), foil, cutlery, 
+        metal containers, pipes — any metal regardless of color or shape.
+        Based on material properties: specularity pattern, 
+        surface texture, local contrast variance.
+        """
+        gray = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2GRAY)
+        hsv = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2HSV)
+        h, w = gray.shape[:2]
+
+        # --- Signal 1: Specular Adjacency ---
+        # Metal creates bright hotspots directly next to dark areas
+        # This bright-dark transition is the physical signature of hard reflective surfaces
+        v = hsv[:, :, 2].astype(np.float32)
+        bright_mask = v > 210
+        dark_mask = v < 60
+        # Dilate both masks slightly and check overlap proximity
+        kernel = np.ones((5, 5), np.uint8)
+        bright_dilated = cv2.dilate(bright_mask.astype(np.uint8), kernel)
+        dark_dilated = cv2.dilate(dark_mask.astype(np.uint8), kernel)
+        adjacency_map = bright_dilated & dark_dilated
+        specular_adjacency_ratio = np.sum(adjacency_map) / adjacency_map.size
+        has_specular_adjacency = specular_adjacency_ratio > 0.04
+
+        # --- Signal 2: Local Block Contrast Variance ---
+        # Metal lighting varies dramatically block to block
+        # Organic/paper/textile are more tonally uniform across blocks
+        block_size = max(8, min(h, w) // 8)
+        block_contrasts = []
+        for row in range(0, h - block_size, block_size):
+            for col in range(0, w - block_size, block_size):
+                block = gray[row:row+block_size, col:col+block_size]
+                block_contrasts.append(float(block.max()) - float(block.min()))
+        
+        if block_contrasts:
+            contrast_variance = np.std(block_contrasts)
+            # High variance = some blocks very bright, some very dark = metal lighting
+            has_high_block_variance = contrast_variance > 40
+        else:
+            has_high_block_variance = False
+
+        # --- Signal 3: Edge Sharpness (Laplacian) ---
+        # Metal surfaces produce very sharp, well-defined edges
+        # Organic waste edges are softer and more irregular
+        laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+        laplacian_var = laplacian.var()
+        # Metal: high laplacian variance from sharp reflective edges
+        has_sharp_edges = laplacian_var > 300
+
+        # --- Signal 4: Non-organic dominant color ---
+        # Veto organic hue range — if dominant color is clearly non-food
+        # (red, blue, silver, black) it supports metal classification
+        sat = hsv[:, :, 1]
+        hue = hsv[:, :, 0]
+        # Organic hue range: greens/yellows/browns (10-85)
+        organic_hue_mask = (hue > 10) & (hue < 85) & (sat > 50)
+        organic_pixel_ratio = np.sum(organic_hue_mask) / organic_hue_mask.size
+        # Non-organic and not just background grey
+        high_sat_non_organic = (np.sum(sat > 80) / sat.size > 0.15) and organic_pixel_ratio < 0.25
+        is_grey_metal = np.mean(sat) < 35 and np.mean(hsv[:,:,2]) > 80
+        has_non_organic_color = high_sat_non_organic or is_grey_metal
+
+        signals = (
+            int(has_specular_adjacency) +
+            int(has_high_block_variance) +
+            int(has_sharp_edges) +
+            int(has_non_organic_color)
+        )
+
+        logger.debug(
+            f"Metal check — specular_adj:{has_specular_adjacency} "
+            f"block_var:{has_high_block_variance} sharp:{has_sharp_edges} "
+            f"color:{has_non_organic_color} → {signals}/4"
+        )
+        return signals >= 2
+
+    def _hsv_veto(self, crop_bgr: np.ndarray, predicted_category: str) -> Optional[str]:
+        hsv = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2HSV)
+        warm_mask = ((hsv[:,:,0] > 10) & (hsv[:,:,0] < 45) & (hsv[:,:,1] > 60))
+        is_warm_organic = (np.sum(warm_mask) / warm_mask.size) > 0.25
+        is_metal = self._is_metal_material(crop_bgr)
+
+        if predicted_category in {"biological", "organic", "food"} and is_metal:
+            return "metal"
+
+        if predicted_category in {"clothes", "shoes", "textile"} and is_warm_organic:
+            return "biological"
+
+        if predicted_category == "metal" and is_warm_organic and not is_metal:
+            return "biological"
+
+        return None
+
     def _run_inference(self, image: np.ndarray, is_stream: bool = False) -> list[Detection]:
         img_for_yolo = resize_image(image, max_size=640)
         h, w = img_for_yolo.shape[:2]
@@ -134,9 +229,65 @@ class DetectorService:
 
         yolo_conf = 0.12 if is_stream else 0.08
         results = self._yolo(
-            img_for_yolo, conf=yolo_conf, iou=0.55, agnostic_nms=True,
+            img_for_yolo, conf=yolo_conf, iou=0.40, agnostic_nms=True,
             half=(self._device.type == "cuda"), verbose=False
         )
+
+        raw_boxes = []
+        for result in results:
+            for box in result.boxes:
+                if int(box.cls[0].item()) != 0:
+                    raw_boxes.append({
+                        "xyxy": box.xyxy[0].tolist(),
+                        "cls": int(box.cls[0].item()),
+                        "conf": float(box.conf[0].item())
+                    })
+
+        # Fallback Dense Pass to catch small or obscured objects
+        if not is_stream:
+            logger.debug("Running dense fallback pass (sliding window)")
+            quads = [
+                (0, 0, w//2 + 20, h//2 + 20),
+                (w//2 - 20, 0, w, h//2 + 20),
+                (0, h//2 - 20, w//2 + 20, h),
+                (w//2 - 20, h//2 - 20, w, h)
+            ]
+            for (qx1, qy1, qx2, qy2) in quads:
+                qx1, qy1, qx2, qy2 = max(0, qx1), max(0, qy1), min(w, qx2), min(h, qy2)
+                q_img = img_for_yolo[qy1:qy2, qx1:qx2]
+                if q_img.size == 0: continue
+                q_res = self._yolo(
+                    q_img, conf=0.04, iou=0.40, agnostic_nms=True,
+                    half=(self._device.type == "cuda"), verbose=False
+                )
+                for qb in q_res[0].boxes:
+                    if int(qb.cls[0].item()) != 0:
+                        bx1, by1, bx2, by2 = qb.xyxy[0].tolist()
+                        raw_boxes.append({
+                            "xyxy": [bx1+qx1, by1+qy1, bx2+qx1, by2+qy1],
+                            "cls": int(qb.cls[0].item()),
+                            "conf": float(qb.conf[0].item())
+                        })
+            
+            # Simple NMS to merge sliding window overlap
+            raw_boxes = sorted(raw_boxes, key=lambda x: x['conf'], reverse=True)
+            keep = []
+            for box in raw_boxes:
+                overlap = False
+                for k in keep:
+                    ix1, iy1 = max(box['xyxy'][0], k['xyxy'][0]), max(box['xyxy'][1], k['xyxy'][1])
+                    ix2, iy2 = min(box['xyxy'][2], k['xyxy'][2]), min(box['xyxy'][3], k['xyxy'][3])
+                    iw, ih = max(0, ix2 - ix1), max(0, iy2 - iy1)
+                    inter = iw * ih
+                    area1 = (box['xyxy'][2] - box['xyxy'][0]) * (box['xyxy'][3] - box['xyxy'][1])
+                    area2 = (k['xyxy'][2] - k['xyxy'][0]) * (k['xyxy'][3] - k['xyxy'][1])
+                    union = area1 + area2 - inter
+                    if union > 0 and (inter / union) > 0.45:
+                        overlap = True
+                        break
+                if not overlap:
+                    keep.append(box)
+            raw_boxes = keep
 
         detections: list[Detection] = []
         valid_items = []
@@ -144,41 +295,38 @@ class DetectorService:
         batch_tensors = []
         box_metadata = []
 
-        for result in results:
-            for i, box in enumerate(result.boxes):
-                if int(box.cls[0].item()) == 0:
-                    continue
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
+        for i, b in enumerate(raw_boxes):
+            x1, y1, x2, y2 = b["xyxy"]
 
-                area_ratio = ((x2 - x1) * (y2 - y1)) / (w * h)
-                if area_ratio < 0.002 or area_ratio > 0.85:
-                    continue
+            area_ratio = ((x2 - x1) * (y2 - y1)) / (w * h)
+            if area_ratio < 0.002 or area_ratio > 0.85:
+                continue
 
-                orig_x1, orig_y1 = int(x1 * scale_x), int(y1 * scale_y)
-                orig_x2, orig_y2 = int(x2 * scale_x), int(y2 * scale_y)
-                orig_x1, orig_y1 = max(0, orig_x1), max(0, orig_y1)
-                orig_x2, orig_y2 = min(orig_w, orig_x2), min(orig_h, orig_y2)
+            orig_x1, orig_y1 = int(x1 * scale_x), int(y1 * scale_y)
+            orig_x2, orig_y2 = int(x2 * scale_x), int(y2 * scale_y)
+            orig_x1, orig_y1 = max(0, orig_x1), max(0, orig_y1)
+            orig_x2, orig_y2 = min(orig_w, orig_x2), min(orig_h, orig_y2)
 
-                dw = int((orig_x2 - orig_x1) * 0.1)
-                dh = int((orig_y2 - orig_y1) * 0.1)
-                orig_x1 = max(0, orig_x1 - dw)
-                orig_y1 = max(0, orig_y1 - dh)
-                orig_x2 = min(orig_w, orig_x2 + dw)
-                orig_y2 = min(orig_h, orig_y2 + dh)
+            dw = int((orig_x2 - orig_x1) * 0.1)
+            dh = int((orig_y2 - orig_y1) * 0.1)
+            orig_x1 = max(0, orig_x1 - dw)
+            orig_y1 = max(0, orig_y1 - dh)
+            orig_x2 = min(orig_w, orig_x2 + dw)
+            orig_y2 = min(orig_h, orig_y2 + dh)
 
-                crop = image[orig_y1:orig_y2, orig_x1:orig_x2]
-                if crop.size == 0 or crop.shape[0] == 0 or crop.shape[1] == 0:
-                    continue
+            crop = image[orig_y1:orig_y2, orig_x1:orig_x2]
+            if crop.size == 0 or crop.shape[0] == 0 or crop.shape[1] == 0:
+                continue
 
-                pil_img = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
-                tensor = self._transform(pil_img).unsqueeze(0).to(self._device)
-                if self._device.type == "cuda":
-                    tensor = tensor.half()
+            pil_img = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
+            tensor = self._transform(pil_img).unsqueeze(0).to(self._device)
+            if self._device.type == "cuda":
+                tensor = tensor.half()
 
-                yolo_class_id = int(box.cls[0].item())
-                yolo_conf_val = float(box.conf[0].item())
-                batch_tensors.append(tensor)
-                box_metadata.append((result, i, x1, y1, x2, y2, yolo_class_id, yolo_conf_val))
+            yolo_class_id = b["cls"]
+            yolo_conf_val = b["conf"]
+            batch_tensors.append(tensor)
+            box_metadata.append((None, i, x1, y1, x2, y2, yolo_class_id, yolo_conf_val, crop))
 
         if not batch_tensors:
             logger.debug("Inference complete — 0 detections")
@@ -192,9 +340,18 @@ class DetectorService:
             k = min(5, num_classes)
             topk_vals, topk_indices = probs.topk(k, dim=1)
 
-        for j, (result, i, x1, y1, x2, y2, yolo_class_id, yolo_conf_val) in enumerate(box_metadata):
-            confidence_val = topk_vals[j][0].item()
-            raw_category = self._class_names[topk_indices[j][0].item()]
+        for j, (result, i, x1, y1, x2, y2, yolo_class_id, yolo_conf_val, crop) in enumerate(box_metadata):
+            # --- TOP-K VOTING ---
+            top_categories = [self._class_names[topk_indices[j][r].item()] for r in range(k)]
+            top_confidences = [topk_vals[j][r].item() for r in range(k)]
+
+            vote_scores = {}
+            for rank, (cat, conf) in enumerate(zip(top_categories, top_confidences)):
+                weight = 1.0 / (rank + 1)  # rank 1 gets full weight, rank 2 gets half, etc.
+                vote_scores[cat] = vote_scores.get(cat, 0) + conf * weight
+
+            raw_category = max(vote_scores, key=vote_scores.get)
+            confidence_val = top_confidences[0]  # still use top-1 conf for threshold checks
 
             # Structural overrides using YOLO COCO classes
             if yolo_class_id in [63, 64, 65, 66, 67] and yolo_conf_val > 0.25:
@@ -202,18 +359,19 @@ class DetectorService:
                     raw_category = "battery"
                     confidence_val = max(confidence_val, 0.85)
 
-            elif 52 <= yolo_class_id <= 61 and yolo_conf_val > 0.30:
-                if raw_category not in ["clothes", "shoes", "textile", "metal", "glass", "white-glass", "green-glass", "brown-glass", "battery"]:
-                    raw_category = "biological"
-                    confidence_val = max(confidence_val, 0.95)
+            elif 46 <= yolo_class_id <= 55 and yolo_conf_val > 0.30:
+                if raw_category not in ["clothes", "shoes", "textile", "metal", "glass", "battery"]:
+                    if not self._is_metal_material(crop):
+                        raw_category = "biological"
+                        confidence_val = max(confidence_val, 0.95)
 
             elif yolo_class_id == 40 and yolo_conf_val > 0.25:
-                if raw_category not in ["white-glass", "green-glass", "brown-glass"]:
-                    raw_category = "white-glass"
+                if raw_category != "glass":
+                    raw_category = "glass"
                 confidence_val = max(confidence_val, 0.90)
 
             elif yolo_class_id in [39, 41] and yolo_conf_val > 0.25:
-                valid_materials = ["plastic", "glass", "white-glass", "green-glass", "brown-glass", "metal", "paper"]
+                valid_materials = ["plastic", "glass", "metal", "paper"]
                 if raw_category not in valid_materials:
                     for r_rank in range(1, k):
                         alt_cat = self._class_names[topk_indices[j][r_rank].item()]
@@ -223,10 +381,12 @@ class DetectorService:
                             break
                     else:
                         raw_category = "plastic"
-                elif raw_category in ["glass", "white-glass", "green-glass", "brown-glass", "plastic"]:
+                elif raw_category in ["glass", "plastic"]:
                     confidence_val = min(0.98, confidence_val + 0.35)
 
             elif raw_category in ["metal", "battery", "trash"]:
+                if self._is_metal_material(crop):
+                    raw_category = "metal"
                 confidence_val = min(0.96, confidence_val + 0.35)
 
             elif raw_category in ["clothes", "shoes", "textile"] and confidence_val < 0.85:
@@ -240,6 +400,34 @@ class DetectorService:
                         raw_category = "plastic"
                 else:
                     raw_category = "plastic"
+
+            ORGANIC_CLASSES = {"biological", "organic", "food"}
+            ORGANIC_CONFIDENCE_FLOOR = 0.70
+
+            # Only apply confidence floor if YOLO didn't predict a food class (46-55)
+            is_yolo_food = 46 <= yolo_class_id <= 55
+
+            if raw_category in ORGANIC_CLASSES and confidence_val < ORGANIC_CONFIDENCE_FLOOR and not is_yolo_food:
+                # Find best non-organic alternative from top-k
+                fallback_found = False
+                for rank in range(1, k):
+                    alt_cat = self._class_names[topk_indices[j][rank].item()]
+                    alt_conf = topk_vals[j][rank].item()
+                    if alt_cat not in ORGANIC_CLASSES:
+                        raw_category = alt_cat
+                        confidence_val = alt_conf
+                        fallback_found = True
+                        break
+                if not fallback_found:
+                    raw_category = "trash"  # safe fallback
+                    confidence_val = 0.50
+
+            # HSV veto check
+            veto_result = self._hsv_veto(crop, raw_category)  # call after top-k voting sets raw_category
+            if veto_result is not None:
+                logger.debug(f"HSV veto fired: {raw_category} → {veto_result}")
+                raw_category = veto_result
+                confidence_val = max(confidence_val, 0.65)
 
             min_conf = max(0.20, settings.classifier_conf) if is_stream else settings.classifier_conf
             if confidence_val < min_conf:
